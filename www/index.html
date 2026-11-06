@@ -204,6 +204,13 @@ nav.tabs button.on{color:var(--accent)}
 .modal.on{display:flex}
 .modal-in{background:var(--surface);border-radius:14px;padding:14px;max-width:520px;width:100%;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
 .modal-in img{width:100%;height:auto;border-radius:8px;border:1px solid var(--line);-webkit-touch-callout:default;user-select:auto}
+.lock-screen{position:fixed;inset:0;z-index:50;background:#11161a;color:#eaeff2;display:none;align-items:center;justify-content:center;padding:24px;text-align:center}
+.lock-screen.on{display:flex}
+.lock-screen .box{max-width:360px;display:flex;flex-direction:column;gap:14px;align-items:center}
+.lock-screen .ic{font-size:44px}
+.lock-screen h2{margin:0;font-size:20px}
+.lock-screen p{margin:0;color:#98a6b0;font-size:15px;line-height:1.6}
+.lock-screen button{background:#ff6b52;border-color:#ff6b52;color:#2a0b05}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -448,7 +455,8 @@ nav.tabs button.on{color:var(--accent)}
   <div class="card">
     <h3>표시</h3>
     <label class="f" for="prec">표시 단위<select id="prec" data-st="prec"><option value="1">1 mm</option><option value="0.5">0.5 mm</option><option value="0.1">0.1 mm</option></select></label>
-    <div class="sub">벤딩 마킹 계산기 v2.8 · 벤치형 벤더, 벤딩 시작점(0°선) 마킹 기준</div>
+    <div class="sub">벤딩 마킹 계산기 v2.9 · 벤치형 벤더, 벤딩 시작점(0°선) 마킹 기준</div>
+    <div class="sub" id="lockInfo"></div>
   </div>
 </section>
 </div>
@@ -462,6 +470,14 @@ nav.tabs button.on{color:var(--accent)}
   <button type="button" data-act="tab" data-tab="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>장비</button>
 </div></nav>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="lock-screen" id="lockScreen" role="alertdialog" aria-modal="true" aria-labelledby="lockTitle">
+  <div class="box">
+    <div class="ic">🔒</div>
+    <h2 id="lockTitle">사용이 잠겨 있어요</h2>
+    <p id="lockMsg"></p>
+    <button type="button" data-act="lockRetry">다시 확인</button>
+  </div>
+</div>
 <div class="modal" id="imgModal" role="dialog" aria-modal="true" aria-label="마킹 결과 이미지">
   <div class="modal-in">
     <div class="row" style="justify-content:space-between"><b>마킹 결과 이미지</b><button type="button" class="ghost" data-act="closeImg">닫기 ✕</button></div>
@@ -1241,6 +1257,7 @@ document.addEventListener('click', async e => {
     tools.off.H = Math.round(res.a*100)/100; tools.off.A = Math.round(res.t*100)/100; fillToolInputs();
     const o = PAT.off(tools.off); st.segs = o.segs; st.bends = o.bends; st.note = o.note; buildSeq(); fillCalcInputs(); renderCalc(); renderTools(); saveAll(); setTab('calc'); toast('오프셋으로 적용했어요'); return; }
   if (a==='share'){ if (st._invalid) return toast('치수 오류를 먼저 고쳐주세요'); return shareText(lastText); }
+  if (a==='lockRetry') return checkLock(true);
   if (a==='shareImg') return shareImage();
   if (a==='copyImg') return copyImage();
   if (a==='closeImg'){ $('#imgModal').classList.remove('on'); return; }
@@ -1286,7 +1303,45 @@ document.addEventListener('click', async e => {
   if (a==='delSb'){ P().sbRecs.splice(+b.dataset.i,1); renderSb(); renderCalc(); renderTools(); saveAll(); return; }
 });
 
+/* ---------- 원격 잠금 ----------
+   GitHub 저장소의 www/status.json 에서 "enabled": false 로 바꾸면 모든 웹앱·APK가 잠겨요.
+   인터넷 확인이 graceDays(기본 7일) 넘게 안 되면 연결될 때까지 잠겨요. */
+const STATUS_URL = 'https://vldhv2-rgb.github.io/bend-calc-Public/status.json';
+const LOCK_ON = /github\.io$/.test(location.hostname) || location.hostname === 'localhost';
+function lockShow(msg){ $('#lockMsg').textContent = msg; $('#lockScreen').classList.add('on'); }
+function lockHide(){ $('#lockScreen').classList.remove('on'); }
+function lockInfo(){
+  const L = LS.get('bc2-lock', {});
+  $('#lockInfo').textContent = !LOCK_ON ? '원격 잠금: 이 화면(미리보기)에서는 꺼져 있어요'
+    : `원격 잠금 확인: ${L.lastOk ? new Date(L.lastOk).toLocaleString('ko-KR') : '아직 없음'}`;
+}
+async function checkLock(manual){
+  if (!LOCK_ON){ lockInfo(); return; }
+  const L = Object.assign({firstSeen: Date.now(), graceDays: 7}, LS.get('bc2-lock', {}));
+  let res = null;
+  try {
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
+    const r = await fetch(STATUS_URL + '?t=' + Date.now(), {cache: 'no-store', signal: ctl.signal});
+    clearTimeout(tm);
+    if (r.ok) res = await r.json();
+  } catch(e){}
+  if (res){
+    L.graceDays = +res.graceDays || 7;
+    if (res.enabled === false){ L.locked = true; L.msg = res.message || '관리자가 사용을 중지했어요.'; LS.set('bc2-lock', L); lockShow(L.msg); lockInfo(); return; }
+    L.locked = false; L.lastOk = Date.now(); L.msg = ''; LS.set('bc2-lock', L); lockHide(); lockInfo();
+    if (manual) toast('사용 가능 확인됐어요');
+    return;
+  }
+  LS.set('bc2-lock', L);
+  if (L.locked){ lockShow(L.msg || '관리자가 사용을 중지했어요.'); }
+  else if (Date.now() - (L.lastOk || L.firstSeen) > L.graceDays*86400000){ lockShow(`${L.graceDays}일 넘게 사용 확인을 못 했어요. 인터넷에 연결한 뒤 "다시 확인"을 눌러주세요.`); }
+  else if (manual){ toast('인터넷 연결을 확인해주세요'); }
+  lockInfo();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkLock(false); });
+
 buildPresetChips(); buildSeq(); fillCalcInputs(); fillToolInputs(); renderCalc(); renderTools(); setTab('calc');
+checkLock(false);
 try { const cp = CAP(); if (cp && cp.App) cp.App.addListener('backButton', () => { if (tab !== 'calc') setTab('calc'); else cp.App.exitApp(); }); } catch(e){}
 if ('serviceWorker' in navigator && location.protocol === 'https:') { try { navigator.serviceWorker.register('sw.js').catch(()=>{}); } catch(e){} }
 </script>
