@@ -200,6 +200,10 @@ nav.tabs button svg{width:22px;height:22px}
 nav.tabs button.on{color:var(--accent)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 76px + env(safe-area-inset-bottom));background:var(--ink);color:var(--surface);padding:9px 16px;border-radius:999px;font-size:14px;z-index:9;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.on{opacity:1}
+.modal{position:fixed;inset:0;background:rgba(10,14,17,.72);z-index:20;display:none;align-items:center;justify-content:center;padding:16px}
+.modal.on{display:flex}
+.modal-in{background:var(--surface);border-radius:14px;padding:14px;max-width:520px;width:100%;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.modal-in img{width:100%;height:auto;border-radius:8px;border:1px solid var(--line);-webkit-touch-callout:default;user-select:auto}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -252,9 +256,11 @@ nav.tabs button.on{color:var(--accent)}
     <div class="marks" id="marks"></div>
     <div class="stock" id="stockMsg"></div>
     <svg id="tape" viewBox="0 0 600 110" role="img" aria-label="튜브 마킹 위치"></svg>
+    <div class="sub">막대 안 검은 숫자 = 곧은 부분, 빨간 <b>휨</b> = 휘는 부분, 아래 숫자 = 단일 마킹 (곧은 부분 + 앞 벤딩 휨)</div>
     <div class="row">
-      <button type="button" class="primary" data-act="share">결과 공유</button>
-      <button type="button" data-act="copy">복사</button>
+      <button type="button" class="primary" data-act="shareImg">이미지 공유</button>
+      <button type="button" data-act="copyImg">이미지 복사</button>
+      <button type="button" data-act="copy">텍스트 복사</button>
       <button type="button" data-act="quickSave">작업 저장</button>
     </div>
     <details open>
@@ -442,7 +448,7 @@ nav.tabs button.on{color:var(--accent)}
   <div class="card">
     <h3>표시</h3>
     <label class="f" for="prec">표시 단위<select id="prec" data-st="prec"><option value="1">1 mm</option><option value="0.5">0.5 mm</option><option value="0.1">0.1 mm</option></select></label>
-    <div class="sub">벤딩 마킹 계산기 v2.6 · 벤치형 벤더, 벤딩 시작점(0°선) 마킹 기준</div>
+    <div class="sub">벤딩 마킹 계산기 v2.8 · 벤치형 벤더, 벤딩 시작점(0°선) 마킹 기준</div>
   </div>
 </section>
 </div>
@@ -456,6 +462,13 @@ nav.tabs button.on{color:var(--accent)}
   <button type="button" data-act="tab" data-tab="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>장비</button>
 </div></nav>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="modal" id="imgModal" role="dialog" aria-modal="true" aria-label="마킹 결과 이미지">
+  <div class="modal-in">
+    <div class="row" style="justify-content:space-between"><b>마킹 결과 이미지</b><button type="button" class="ghost" data-act="closeImg">닫기 ✕</button></div>
+    <div class="sub">이미지를 <b>길게 눌러</b> 복사하거나 저장한 뒤 카톡에 붙여넣으세요.</div>
+    <img id="imgOut" alt="마킹 결과 이미지">
+  </div>
+</div>
 
 <script>
 /*CALC*/
@@ -523,7 +536,7 @@ let tools = Object.assign({off:{H:180,A:45,L1:300,L3:300}, roll:{V:150,W:100,A:4
 if (!tools.tri || !tools.tri.order) tools.tri = {a:50,b:null,c:150,t:null,order:['a','c']};
 let jobs = LS.get('bc2-jobs', []);
 let tab = 'calc';
-let lastText = '';
+let lastText = '', lastRes = null;
 
 const DIRS = {L:{t:'좌',i:'←'}, R:{t:'우',i:'→'}, U:{t:'상',i:'↑'}, D:{t:'하',i:'↓'}};
 const normB = arr => (arr||[]).forEach(b => { if (!DIRS[b.dir]) b.dir = (b.d < 0 ? 'R' : 'L'); delete b.d; });
@@ -725,6 +738,7 @@ function renderCalc(){
       : `<span style="color:var(--accent);font-weight:700">일자관이 ${fmt(-rem)}mm 모자라요 (필요 ${fmt(need)})</span>`;
   } else $('#stockMsg').innerHTML = '';
 
+  lastRes = {p, r, cum, t0};
   drawTape(r, cum, t0); drawShape(r);
   renderFormula(p, r, cum, t0, ins, mpd);
 }
@@ -888,6 +902,104 @@ function renderFormula(p, r, cum, t0, ins, mpd){
   $('#formula').innerHTML = h;
 }
 
+const IMG_COL = {bg:'#ffffff', ink:'#151c21', muted:'#56636d', line:'#d0d7dc', accent:'#cf3720', 'accent-soft':'#fbe4df', tube:'#a3aeb6', surface:'#ffffff', ok:'#1f7a4d', warn:'#9a5b00', 'warn-soft':'#fff0d2', 'on-accent':'#ffffff'};
+function svgToImage(svgEl, w, h){
+  return new Promise(res => {
+    let xml = new XMLSerializer().serializeToString(svgEl).replace(/var\(--([a-z-]+)\)/g, (m,k) => IMG_COL[k] || '#151c21');
+    if (!/xmlns=/.test(xml)) xml = xml.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+    xml = xml.replace('<svg', `<svg width="${w}" height="${h}"`);
+    const img = new Image();
+    img.onload = () => res(img); img.onerror = () => res(null);
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+  });
+}
+async function buildResultImage(){
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch(e){}
+  const {p, r, cum, t0} = lastRes;
+  const W = 1080, PAD = 56, SANS = '"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif', MONO = '"IBM Plex Mono",Menlo,Consolas,monospace';
+  const rowH = 150, n = cum.length;
+  const tapeH = Math.round((W-2*PAD)*110/600), shapeH = Math.round((W-2*PAD)*260/400);
+  const H = 210 + n*rowH + 40 + tapeH + 40 + shapeH + 120;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'), c = IMG_COL;
+  g.fillStyle = c.bg; g.fillRect(0,0,W,H);
+  // 머리말
+  g.fillStyle = c.ink; g.font = `700 52px ${SANS}`; g.textBaseline = 'alphabetic';
+  g.fillText('벤딩 마킹 결과', PAD, 92);
+  const d = new Date(), ds = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  g.fillStyle = c.muted; g.font = `500 30px ${SANS}`;
+  g.fillText(`${p.name}${String(p.name).includes('R'+p.R)?'':' · R'+p.R} · 줄자 ${t0||0} 시작`, PAD, 142);
+  g.textAlign = 'right'; g.fillText(ds, W-PAD, 92); g.textAlign = 'left';
+  if (st.note){ g.font = `500 26px ${SANS}`; let t = st.note; while (g.measureText(t).width > W-2*PAD && t.length > 4) t = t.slice(0,-2); g.fillText(t === st.note ? t : t + '…', PAD, 182); }
+  // 마킹 행
+  let y = 210;
+  cum.forEach((cv2, i) => {
+    const isCut = i === n-1, single = cv2 - (i ? cum[i-1] : 0);
+    g.strokeStyle = c.line; g.lineWidth = 2; g.beginPath(); g.moveTo(PAD, y); g.lineTo(W-PAD, y); g.stroke();
+    g.fillStyle = c.ink; g.font = `700 32px ${SANS}`; g.fillText(isCut ? '절단' : `마킹 ${i+1}`, PAD, y+46);
+    const tagW = g.measureText(isCut ? '절단' : `마킹 ${i+1}`).width;
+    const badge = isCut ? 'C' : ang(r.B[i].a);
+    g.font = `600 28px ${MONO}`; const bw = g.measureText(badge).width + 22;
+    g.fillStyle = isCut ? c.ink : c.accent; g.beginPath(); g.roundRect ? g.roundRect(PAD+tagW+14, y+18, bw, 38, 8) : g.rect(PAD+tagW+14, y+18, bw, 38); g.fill();
+    g.fillStyle = '#fff'; g.fillText(badge, PAD+tagW+25, y+47);
+    if (!isCut){
+      const a = r.B[i].a, setA = a + (p.sbOn ? springback(p.sbRecs, a) : 0);
+      const bits = [dirTxt(st.bends[i].dir)];
+      if (Math.abs(setA-a) > 0.05) bits.push(`눈금 ${ang(setA)}`);
+      if (p.dieOn && mmPerDeg(p) > 0) bits.push(`다이 ${f1(setA*mmPerDeg(p))}mm`);
+      g.fillStyle = c.ink; g.font = `600 28px ${SANS}`; g.fillText(bits.join(' · '), PAD+tagW+bw+30, y+47);
+    }
+    g.fillStyle = isCut ? c.accent : c.ink; g.font = `600 84px ${MONO}`; g.fillText(fmt(cv2+t0), PAD, y+134);
+    g.textAlign = 'right'; g.fillStyle = c.muted; g.font = `500 26px ${SANS}`; g.fillText('단일', W-PAD, y+86);
+    g.fillStyle = c.ink; g.font = `600 44px ${MONO}`; g.fillText(fmt(single), W-PAD, y+132); g.textAlign = 'left';
+    y += rowH;
+  });
+  g.strokeStyle = c.line; g.beginPath(); g.moveTo(PAD, y); g.lineTo(W-PAD, y); g.stroke();
+  y += 40;
+  const tapeImg = await svgToImage($('#tape'), W-2*PAD, tapeH);
+  if (tapeImg) g.drawImage(tapeImg, PAD, y, W-2*PAD, tapeH);
+  y += tapeH + 40;
+  g.fillStyle = '#f2f4f6'; g.fillRect(PAD, y, W-2*PAD, shapeH);
+  const shapeImg = await svgToImage($('#shape'), W-2*PAD, shapeH);
+  if (shapeImg) g.drawImage(shapeImg, PAD, y, W-2*PAD, shapeH);
+  y += shapeH + 56;
+  g.fillStyle = c.muted; g.font = `500 26px ${SANS}`;
+  const segTxt = st.segs.map((sg,k)=>modeLab(sg,k,st.segs.length)+(k+1)+' '+sg.v).join(' · ') + '  |  각도 ' + st.bends.map(b=>ang(+b.a)).join(' / ');
+  g.fillText(segTxt.slice(0,70), PAD, y);
+  g.fillText('큰 숫자 = 줄자 누적값 · 마킹은 벤딩 시작점(0°선) 기준', PAD, y+40);
+  return cv;
+}
+const canvasBlob = cv => new Promise(res => cv.toBlob(res, 'image/png'));
+function showImg(url){ $('#imgOut').src = url; $('#imgModal').classList.add('on'); }
+async function shareImage(){
+  if (st._invalid || !lastRes) return toast('치수 오류를 먼저 고쳐주세요');
+  toast('이미지 만드는 중…');
+  const cv = await buildResultImage();
+  const name = `벤딩마킹_${Date.now()}.png`;
+  const cp = CAP();
+  if (cp && cp.Filesystem && cp.Share){
+    try {
+      const w = await cp.Filesystem.writeFile({path: name, data: cv.toDataURL('image/png').split(',')[1], directory: 'CACHE'});
+      await cp.Share.share({files: [w.uri], dialogTitle: '마킹 결과 공유'}); return;
+    } catch(e){ if (/cancel/i.test(String(e && e.message || e))) return; }
+  }
+  try {
+    const blob = await canvasBlob(cv), file = new File([blob], name, {type: 'image/png'});
+    if (navigator.canShare && navigator.canShare({files: [file]})){ await navigator.share({files: [file], title: '벤딩 마킹 결과'}); return; }
+  } catch(e){ if (e && e.name === 'AbortError') return; }
+  showImg(cv.toDataURL('image/png'));
+}
+function copyImage(){
+  if (st._invalid || !lastRes) return toast('치수 오류를 먼저 고쳐주세요');
+  const fallback = () => buildResultImage().then(cv => showImg(cv.toDataURL('image/png')));
+  try {
+    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) return fallback();
+    const blobP = buildResultImage().then(canvasBlob);
+    navigator.clipboard.write([new ClipboardItem({'image/png': blobP})])
+      .then(() => toast('이미지를 복사했어요 · 카톡 대화창에 붙여넣기'), fallback);
+  } catch(e){ fallback(); }
+}
+
 function setInvalid(on, msg){
   $('.step.result').classList.toggle('invalid', !!on);
   $('#dockWrap').classList.toggle('invalid', !!on);
@@ -898,6 +1010,11 @@ function drawTape(r, cum, t0){
   const x0 = 24, x1 = 570, sc = (x1-x0)/Math.max(r.cut,1), X = v => x0 + v*sc;
   let s = `<rect x="${x0}" y="44" width="${x1-x0}" height="22" rx="4" fill="var(--tube)" opacity=".55"/>`;
   r.marks.forEach((m,i)=>{ s += `<rect x="${X(m)}" y="44" width="${Math.max(1,r.B[i].arc*sc)}" height="22" fill="var(--accent)" opacity=".35"/>`; });
+  r.straight.forEach((sl,k)=>{ // 막대 안 글자: 곧은 부분 길이 / 휘는 부분 길이
+    const nn = r.straight.length, a0 = k===0 ? 0 : r.marks[k-1] + r.B[k-1].arc, a1 = k<nn-1 ? r.marks[k] : r.cut;
+    if ((a1-a0)*sc > 30) s += `<text x="${X((a0+a1)/2)}" y="59.5" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="12" font-weight="600" fill="var(--ink)">${f1(sl).replace(/\.0$/,'')}</text>`;
+    if (k<nn-1 && r.B[k].arc*sc > 40) s += `<text x="${X(r.marks[k] + r.B[k].arc/2)}" y="59.5" text-anchor="middle" font-family="IBM Plex Sans KR,sans-serif" font-size="11" font-weight="700" fill="var(--accent)">휨 ${Math.round(r.B[k].arc)}</text>`;
+  });
   const pts = [0, ...cum];
   pts.forEach((c,i)=>{
     const x = X(c), isCut = i === pts.length-1;
@@ -1124,6 +1241,9 @@ document.addEventListener('click', async e => {
     tools.off.H = Math.round(res.a*100)/100; tools.off.A = Math.round(res.t*100)/100; fillToolInputs();
     const o = PAT.off(tools.off); st.segs = o.segs; st.bends = o.bends; st.note = o.note; buildSeq(); fillCalcInputs(); renderCalc(); renderTools(); saveAll(); setTab('calc'); toast('오프셋으로 적용했어요'); return; }
   if (a==='share'){ if (st._invalid) return toast('치수 오류를 먼저 고쳐주세요'); return shareText(lastText); }
+  if (a==='shareImg') return shareImage();
+  if (a==='copyImg') return copyImage();
+  if (a==='closeImg'){ $('#imgModal').classList.remove('on'); return; }
   if (a==='copy'){ if (st._invalid) return toast('치수 오류를 먼저 고쳐주세요'); return copyText(lastText); }
   if (a==='lock'){ const k=+b.dataset.k; st.bends[k].lock = !isLocked(st.bends[k]); buildSeq(); renderCalc(); saveAll(); return; }
   if (a==='setLen'){ const k=+b.dataset.k; st.segs[k].v = +b.dataset.v; $('#seg'+k).value = b.dataset.v; renderCalc(); saveAll(); toast('길이를 바꿨어요'); return; }
