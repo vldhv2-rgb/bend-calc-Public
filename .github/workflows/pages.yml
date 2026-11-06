@@ -10,6 +10,11 @@ permissions:
   pages: write
   id-token: write
 
+# 배포가 겹치면 실패하지 않고 순서대로 기다리기
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
