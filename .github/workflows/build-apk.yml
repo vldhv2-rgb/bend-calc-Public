@@ -26,9 +26,24 @@ jobs:
         continue-on-error: true
       - name: 웹 파일 동기화
         run: npx cap sync android
+      - name: 고정 서명 키 준비
+        env:
+          KEYSTORE_B64: ${{ secrets.APK_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            mkdir -p ~/.android && echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+            if [ -n "$ANDROID_USER_HOME" ]; then mkdir -p "$ANDROID_USER_HOME" && cp ~/.android/debug.keystore "$ANDROID_USER_HOME/debug.keystore"; fi
+            echo "고정 서명 키 사용"
+          else
+            echo "서명 키 없음 - 임시 키로 빌드"
+          fi
       - name: APK 빌드
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug
+      - name: 서명 확인
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          $BT/apksigner verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk | grep -i "SHA-256"
       - name: APK 업로드
         uses: actions/upload-artifact@v4
         with:
