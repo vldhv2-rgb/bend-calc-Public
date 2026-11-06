@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12171b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="벤딩마킹">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>튜브 벤딩 마킹 계산기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* 강관 회색 + 마킹펜 빨강. 하단 탭(계산·패턴·작업·장비), 계산 탭은 ①장비 ②치수 ③결과 ④피팅 단계 */
+  --bg:#e9edf0; --surface:#ffffff; --ink:#151c21; --muted:#56636d; --line:#d0d7dc;
+  --accent:#cf3720; --accent-soft:#fbe4df; --tube:#a3aeb6; --ok:#1f7a4d; --warn:#9a5b00; --warn-soft:#fff0d2;
+  --font-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --nav-h:62px; --on-accent:#ffffff;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11161a; --surface:#1a2126; --ink:#eaeff2; --muted:#98a6b0; --line:#2c363d;
+    --accent:#ff6b52; --accent-soft:#3a221d; --on-accent:#2a0b05; --tube:#5d6a73; --ok:#5cc792; --warn:#f0b04a; --warn-soft:#352a14;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11161a; --surface:#1a2126; --ink:#eaeff2; --muted:#98a6b0; --line:#2c363d;
+  --accent:#ff6b52; --accent-soft:#3a221d; --on-accent:#2a0b05; --tube:#5d6a73; --ok:#5cc792; --warn:#f0b04a; --warn-soft:#352a14;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.5;
+  padding-bottom:calc(var(--nav-h) + 64px + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+
+/* 상단 */
+.top{position:sticky;top:0;z-index:6;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .in{max-width:720px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.top h1{font-size:18px;margin:0;letter-spacing:-.01em}
+.pill{font:600 13px var(--font-num);background:var(--ink);color:var(--surface);border:0;border-radius:999px;padding:6px 12px;white-space:nowrap}
+
+.wrap{max-width:720px;margin:0 auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+.view{display:none;flex-direction:column;gap:14px}
+.view.on{display:flex}
+
+/* 카드 / 단계 */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.step-h{display:flex;align-items:center;gap:10px}
+.step-h .no{flex:none;width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;font:700 14px var(--font-num)}
+.step-h h2{font-size:17px;margin:0;text-wrap:balance}
+.step-h .side{margin-left:auto}
+.step.result .step-h .no{background:var(--accent)}
+.sub{color:var(--muted);font-size:13px;line-height:1.55}
+h3{font-size:15px;margin:0}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:400px){.grid3{grid-template-columns:1fr 1fr}}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:600}
+input[type=number],input[type=text],select,textarea{
+  font:600 18px var(--font-num);color:var(--ink);background:var(--bg);border:1.5px solid var(--line);
+  border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+input[type=text]{font-family:var(--font-body);font-size:16px}
+textarea{font-size:12px;min-height:90px;resize:vertical}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:600 15px var(--font-body);cursor:pointer;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 14px;min-height:44px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+button.dark{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:6px 8px;min-height:36px}
+button.danger{color:var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row.end{justify-content:flex-end}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chips.scroll{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;margin:0 -2px}
+.chip{padding:8px 12px;min-height:38px;border-radius:999px;font:600 14px var(--font-num);white-space:nowrap}
+.chip.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chip.sm{padding:5px 8px;min-height:34px;font-size:12.5px}
+.chip.acc.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.info{display:flex;gap:8px;flex-wrap:wrap}
+.info span{background:var(--bg);border-radius:8px;padding:5px 9px;font-size:13px;color:var(--muted)}
+.info b{color:var(--ink);font-family:var(--font-num)}
+.alert{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600}
+.alert:empty{display:none}
+.note-bar{background:var(--accent-soft);border-radius:10px;padding:10px 12px;font-size:14px;display:flex;gap:8px;align-items:flex-start}
+.note-bar:empty{display:none}
+.fix{border:2px solid var(--warn);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--warn-soft)}
+.fix .t{font-weight:700;color:var(--warn);font-size:15px}
+.fix .big{font:600 26px var(--font-num);color:var(--ink)}
+.fix .sub b{color:var(--ink)}
+.opt{background:var(--surface);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.opt .ol{font-weight:700;font-size:14px;color:var(--ink)}
+.opt.imp{opacity:.75}
+.opt.imp .ol{color:var(--muted)}
+.invalid-msg{background:var(--accent);color:var(--on-accent);border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px}
+.invalid-msg:empty{display:none}
+.trim{background:var(--bg);border-radius:10px;padding:8px 12px;font-size:14px}
+.trim:empty{display:none}
+.step.result.invalid .mk .cum,.step.result.invalid .mk .single b{color:var(--muted)!important;text-decoration:line-through;text-decoration-thickness:2px;opacity:.6}
+.step.result.invalid #tape{opacity:.35}
+.dock.invalid .in{opacity:.45;text-decoration:line-through}
+#fixBox:empty{display:none}
+.fxwrap{display:flex;flex-direction:column;gap:12px}
+.fxwrap h4{margin:4px 0 0;font-size:14px;color:var(--muted);font-weight:700;letter-spacing:.02em}
+.fx{background:var(--bg);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;font:500 13px/1.6 var(--font-num)}
+.fx .fx-h{font:700 14px var(--font-body);color:var(--ink);margin-bottom:2px}
+.fx .fx-h .ang{background:var(--accent);color:var(--on-accent);border-radius:6px;padding:0 7px;font:600 13px var(--font-num);margin-left:4px}
+.fx div{white-space:normal;overflow-wrap:anywhere}
+.fx b{color:var(--accent);font-weight:600}
+.fx .c{color:var(--muted);font-family:var(--font-body);font-size:12.5px;white-space:normal}
+.fx.ok b{color:var(--ok)}
+.fig{background:var(--bg);border-radius:12px;padding:6px}
+.fig svg{max-width:420px;margin:0 auto}
+.fx .fig{background:var(--surface);margin:4px 0 6px}
+input.calc{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+
+/* 구간 입력 */
+.seq{display:flex;flex-direction:column;gap:6px}
+.seg{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;background:var(--bg);border-radius:12px;padding:10px 12px}
+.seg .lab{font:700 17px var(--font-num)}
+.seg .hint{grid-column:1/4;font-size:12.5px;color:var(--muted)}
+.seg .hint:empty{display:none}
+.bend{display:flex;flex-direction:column;gap:8px;margin-left:22px;border-left:3px solid var(--accent);padding:8px 0 8px 14px}
+.bend .top-r{display:grid;grid-template-columns:auto 96px auto;gap:8px;align-items:center}
+.chip.lock{justify-self:start}
+.mode.dirs{align-self:flex-start}
+.mode.dirs button{min-width:56px}
+.bend .lab{font:700 14px var(--font-body);color:var(--accent)}
+.bend input{padding:8px 10px}
+.mode{display:flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.mode button{border:0;border-radius:0;padding:6px 12px;min-height:38px;font-size:14px}
+.mode button.on{background:var(--ink);color:var(--surface)}
+
+/* 결과 */
+.marks{display:flex;flex-direction:column}
+.mk{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line)}
+.mk:first-child{border-top:0;padding-top:4px}
+.mk .tag{grid-column:1/3;display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px}
+.mk .ang{background:var(--accent);color:var(--on-accent);border-radius:6px;padding:1px 8px;font:600 14px var(--font-num)}
+.mk .cum{font:600 38px/1.1 var(--font-num);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.mk .single{text-align:right;font-size:12px;color:var(--muted);align-self:end}
+.mk .single b{display:block;font:600 20px var(--font-num);color:var(--ink)}
+.mk .how{grid-column:1/3;font-size:12.5px;color:var(--muted);font-family:var(--font-num)}
+.mk .set{grid-column:1/3;font-size:13.5px;color:var(--ink);font-weight:600}
+.mk .set:empty{display:none}
+.mk.cut .cum{color:var(--accent)}
+.mk.cut .tag .ang{background:var(--ink);color:var(--surface)}
+.stock{background:var(--bg);border-radius:10px;padding:10px 12px;font-size:14px}
+.stock:empty{display:none}
+svg{display:block;width:100%;height:auto}
+details summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--muted);padding:4px 0}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);border-radius:12px;padding:10px 12px;font-weight:600}
+.switch input{width:22px;height:22px;accent-color:var(--accent)}
+
+/* 도우미 */
+.out{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.out div{background:var(--bg);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--muted)}
+.out b{display:block;font:600 19px var(--font-num);color:var(--ink)}
+@media (max-width:400px){.out{grid-template-columns:1fr 1fr}}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:600;font-size:12px}
+td{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.tbl{overflow-x:auto}
+.note{font-size:14px;color:var(--muted);line-height:1.7}
+.note b{color:var(--ink)}
+.note p{margin:6px 0}
+
+/* 작업 / 장비 목록 */
+.list{display:flex;flex-direction:column;gap:8px}
+.item{background:var(--bg);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.item .t{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.item .t b{font-size:16px}
+.item .t small{color:var(--muted);font-size:12px;white-space:nowrap}
+.item .d{font:500 13px var(--font-num);color:var(--muted)}
+.item.sel{outline:2px solid var(--accent)}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:16px}
+
+/* 하단 */
+.dock{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));background:#151c21;color:#f1f4f6;border-top:1px solid #2c363d;z-index:5}
+.dock .in{max-width:720px;margin:0 auto;padding:9px 16px;display:flex;gap:16px;overflow-x:auto;align-items:baseline;white-space:nowrap}
+.dock .in span{font:600 18px var(--font-num)}
+.dock .in small{font:600 11px var(--font-body);opacity:.65;margin-right:4px}
+.dock .in .c{color:#ff8a75}
+.dock.hide{display:none}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs .in{max-width:720px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);height:var(--nav-h)}
+nav.tabs button{border:0;border-radius:0;background:transparent;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;padding:4px}
+nav.tabs button svg{width:22px;height:22px}
+nav.tabs button.on{color:var(--accent)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 76px + env(safe-area-inset-bottom));background:var(--ink);color:var(--surface);padding:9px 16px;border-radius:999px;font-size:14px;z-index:9;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top"><div class="in">
+  <h1>벤딩 마킹 계산기</h1>
+  <button type="button" class="pill" id="presetPill" data-act="tab" data-tab="setup">3/4" · R100</button>
+</div></header>
+
+<div class="wrap">
+
+<!-- ======================= 계산 ======================= -->
+<section class="view on" id="v-calc">
+
+  <div class="card step">
+    <div class="step-h"><span class="no">1</span><h2>튜브 · 벤딩기 · 줄자</h2></div>
+    <div class="chips scroll" id="presetChips"></div>
+    <div class="info" id="presetInfo"></div>
+    <div class="grid2">
+      <label class="f" for="t0">튜브 끝에 맞춘 줄자 눈금<input id="t0" type="number" inputmode="decimal" step="any" data-st="t0"></label>
+      <label class="f" for="stock">일자관 길이 (선택)<input id="stock" type="number" inputmode="decimal" step="any" placeholder="예: 6000" data-st="stock"></label>
+    </div>
+    <div class="row"><span class="sub">줄자 시작</span><div class="chips" id="t0chips"></div></div>
+    <div class="row"><span class="sub">표시 단위</span><div class="chips" id="precChips"><button type="button" class="chip sm" data-act="prec" data-v="1">1mm</button><button type="button" class="chip sm" data-act="prec" data-v="0.5">0.5mm</button><button type="button" class="chip sm" data-act="prec" data-v="0.1">0.1mm</button></div></div>
+  </div>
+
+  <div class="card step">
+    <div class="step-h"><span class="no">2</span><h2>치수 입력</h2>
+      <button type="button" class="ghost side" data-act="tab" data-tab="tools">패턴 불러오기 →</button></div>
+    <div class="note-bar" id="patternNote"></div>
+    <div class="seq" id="seq"></div>
+    <div class="row">
+      <button type="button" data-act="addBend">+ 벤딩 추가</button>
+      <button type="button" data-act="delBend">마지막 벤딩 삭제</button>
+    </div>
+    <div class="row"><span class="sub">빠른 불러오기</span>
+      <button type="button" class="chip sm" data-act="example" data-ex="ex1">예제1 · 90° 두 번</button>
+      <button type="button" class="chip sm" data-act="example" data-ex="ex2">예제2 · 45° 오프셋</button>
+      <button type="button" class="chip sm" data-act="example" data-ex="ex3">예제3 · 90° + 직선 50</button></div>
+    <div class="sub"><b>L</b> 교점(꼭지점) 사이 거리 · <b>H</b> 오프셋 높이 (빗변 = H ÷ sin각도) · <b>S</b> 벤딩과 벤딩 사이 곧은 부분 길이 (예제3의 50)</div>
+  </div>
+
+  <div class="card step result">
+    <div class="step-h"><span class="no">3</span><h2>마킹 결과</h2><span class="sub side" id="resRef"></span></div>
+    <div class="alert" id="alert"></div>
+    <div class="list" id="fixBox"></div>
+    <div class="invalid-msg" id="invalidMsg"></div>
+    <div class="trim" id="trimMsg"></div>
+    <div class="marks" id="marks"></div>
+    <div class="stock" id="stockMsg"></div>
+    <svg id="tape" viewBox="0 0 600 110" role="img" aria-label="튜브 마킹 위치"></svg>
+    <div class="row">
+      <button type="button" class="primary" data-act="share">결과 공유</button>
+      <button type="button" data-act="copy">복사</button>
+      <button type="button" data-act="quickSave">작업 저장</button>
+    </div>
+    <details open>
+      <summary>형상 미리보기 <span id="viewName"></span></summary>
+      <svg id="shape" viewBox="0 0 400 260" role="img" aria-label="벤딩 형상"></svg>
+      <div class="sub">점선 = L 치수선, 실선 = 실제 튜브. 좌우·상하 방향은 형상과 결과 표시에만 쓰이고 마킹 거리에는 영향이 없어요.</div>
+    </details>
+  </div>
+
+  <div class="card step">
+    <div class="step-h"><span class="no">4</span><h2>계산 과정 · 삼각함수</h2></div>
+    <div class="sub">위 결과가 어떤 식으로 나왔는지 실제 숫자를 넣어 보여줘요.</div>
+    <div id="formula" class="fxwrap"></div>
+  </div>
+
+  <div class="card step">
+    <div class="step-h"><span class="no">5</span><h2>피팅 삽입깊이 보정 <span class="sub">(선택)</span></h2></div>
+    <div class="sub">도면 치수가 피팅 기준일 때만 켜세요. 튜브가 피팅 안으로 들어가는 길이만큼 L1·마지막 L에 더해집니다.</div>
+    <label class="f" for="insVal">삽입깊이 (mm) · 현재 장비에 저장<input id="insVal" type="number" inputmode="decimal" step="any" data-pf="ins"></label>
+    <label class="switch" for="insStart">튜브 시작 끝 (L1 쪽) 피팅<input type="checkbox" id="insStart" data-chk="insStart"></label>
+    <label class="switch" for="insEnd">튜브 마지막 끝 (절단 쪽) 피팅<input type="checkbox" id="insEnd" data-chk="insEnd"></label>
+  </div>
+</section>
+
+<!-- ======================= 패턴 · 도우미 ======================= -->
+<section class="view" id="v-tools">
+
+  <div class="card">
+    <h3>삼각함수 계산기</h3>
+    <div class="sub">아무 값이나 <b>2개</b> 넣으면 나머지가 계산돼요. 최근에 입력한 2개가 기준이고, 계산된 값은 빨간 칸으로 표시돼요.</div>
+    <div class="fig" id="triFig"></div>
+    <div class="grid2">
+      <label class="f" for="tr-a">높이 a (대변)<input id="tr-a" type="number" inputmode="decimal" step="any" data-tri="a"></label>
+      <label class="f" for="tr-b">진행 b (밑변)<input id="tr-b" type="number" inputmode="decimal" step="any" data-tri="b"></label>
+      <label class="f" for="tr-c">빗변 c<input id="tr-c" type="number" inputmode="decimal" step="any" data-tri="c"></label>
+      <label class="f" for="tr-t">각도 θ (°)<input id="tr-t" type="number" inputmode="decimal" step="any" data-tri="t"></label>
+    </div>
+    <div class="fx" id="triFx"></div>
+    <div class="row">
+      <button type="button" class="dark" data-act="triToOff">높이 a · 각도 θ로 오프셋 적용</button>
+      <button type="button" data-act="triClear">지우기</button>
+    </div>
+  </div>
+
+
+  <div class="card">
+    <h3>오프셋 (평행 배관 사이 높이차)</h3>
+    <div class="grid2">
+      <label class="f" for="off-H">오프셋 높이 H<input id="off-H" type="number" inputmode="decimal" step="any" data-tool="off.H"></label>
+      <label class="f" for="off-A">각도 θ<input id="off-A" type="number" inputmode="decimal" step="any" data-tool="off.A"></label>
+      <label class="f" for="off-L1">앞 L1<input id="off-L1" type="number" inputmode="decimal" step="any" data-tool="off.L1"></label>
+      <label class="f" for="off-L3">뒤 L3<input id="off-L3" type="number" inputmode="decimal" step="any" data-tool="off.L3"></label>
+    </div>
+    <div class="out" id="out-off"></div>
+    <button type="button" class="dark" data-act="apply" data-pat="off">계산기에 적용</button>
+  </div>
+
+  <div class="card">
+    <h3>롤링 오프셋 (세로 + 가로 동시)</h3>
+    <div class="grid2">
+      <label class="f" for="roll-V">세로 오프셋<input id="roll-V" type="number" inputmode="decimal" step="any" data-tool="roll.V"></label>
+      <label class="f" for="roll-W">가로 오프셋<input id="roll-W" type="number" inputmode="decimal" step="any" data-tool="roll.W"></label>
+      <label class="f" for="roll-A">벤딩 각도 θ<input id="roll-A" type="number" inputmode="decimal" step="any" data-tool="roll.A"></label>
+      <label class="f" for="roll-L1">앞 L1<input id="roll-L1" type="number" inputmode="decimal" step="any" data-tool="roll.L1"></label>
+      <label class="f" for="roll-L3">뒤 L3<input id="roll-L3" type="number" inputmode="decimal" step="any" data-tool="roll.L3"></label>
+    </div>
+    <div class="out" id="out-roll"></div>
+    <button type="button" class="dark" data-act="apply" data-pat="roll">계산기에 적용</button>
+  </div>
+
+  <div class="card">
+    <h3>3벤딩 새들 (장애물 넘기)</h3>
+    <div class="grid2">
+      <label class="f" for="s3-H">넘을 높이 H<input id="s3-H" type="number" inputmode="decimal" step="any" data-tool="s3.H"></label>
+      <label class="f" for="s3-A">가운데 각도 (양옆은 절반)<input id="s3-A" type="number" inputmode="decimal" step="any" data-tool="s3.A"></label>
+      <label class="f" for="s3-X">튜브 끝 → 장애물 중심<input id="s3-X" type="number" inputmode="decimal" step="any" data-tool="s3.X"></label>
+      <label class="f" for="s3-L4">뒤 L4 (마지막 교점 → 끝)<input id="s3-L4" type="number" inputmode="decimal" step="any" data-tool="s3.L4"></label>
+    </div>
+    <div class="out" id="out-s3"></div>
+    <button type="button" class="dark" data-act="apply" data-pat="s3">계산기에 적용</button>
+  </div>
+
+  <div class="card">
+    <h3>4벤딩 새들 (폭 있는 장애물)</h3>
+    <div class="grid2">
+      <label class="f" for="s4-H">넘을 높이 H<input id="s4-H" type="number" inputmode="decimal" step="any" data-tool="s4.H"></label>
+      <label class="f" for="s4-A">각도 θ<input id="s4-A" type="number" inputmode="decimal" step="any" data-tool="s4.A"></label>
+      <label class="f" for="s4-W">윗변 (교점~교점)<input id="s4-W" type="number" inputmode="decimal" step="any" data-tool="s4.W"></label>
+      <label class="f" for="s4-L1">앞 L1<input id="s4-L1" type="number" inputmode="decimal" step="any" data-tool="s4.L1"></label>
+      <label class="f" for="s4-L5">뒤 L5<input id="s4-L5" type="number" inputmode="decimal" step="any" data-tool="s4.L5"></label>
+    </div>
+    <div class="out" id="out-s4"></div>
+    <button type="button" class="dark" data-act="apply" data-pat="s4">계산기에 적용</button>
+  </div>
+
+  <div class="card">
+    <h3>다이 눈금 환산 · <span id="dieTitle" class="num"></span></h3>
+    <div class="sub">각도 눈금이 없거나 안 보일 때, 다이 둘레를 줄자로 재서 각도를 맞추는 값이에요. 장비 탭에서 mm/°를 실측값으로 바꿀 수 있어요.</div>
+    <div class="tbl"><table id="dieTbl"></table></div>
+  </div>
+
+  <div class="card">
+    <h3>각도별 기준값 · R <span id="refR" class="num"></span></h3>
+    <div class="tbl"><table id="ref"></table></div>
+    <details>
+      <summary>계산 원리</summary>
+      <div class="note">
+        <p><b>셋백 SB = R × tan(θ/2)</b> · 교점에서 벤딩 시작점까지. 90°면 R과 같음.</p>
+        <p><b>호 길이 = 0.01745 × R × θ</b> · 실제로 휘는 길이.</p>
+        <p><b>게인 = 2 × SB − 호</b> · 벤딩마다 줄어드는 길이 (R100·90° → 42.9).</p>
+        <p><b>마킹 1</b> = L1 − SB1, <b>마킹 n</b> = 앞 마킹 + 앞 호 + (Ln − 앞 SB − 다음 SB), <b>절단</b> = 마지막 마킹 + 마지막 호 + (마지막 L − SB) = ΣL − Σ게인.</p>
+        <p>마킹은 벤딩기 다이의 <b>0° 선(벤딩 시작점)</b>에 맞추는 방식입니다.</p>
+      </div>
+    </details>
+    <div class="row"><span class="sub">노트 예제</span>
+      <button type="button" data-act="example" data-ex="ex1">예제1 · 90° 두 번</button>
+      <button type="button" data-act="example" data-ex="ex2">예제2 · 45° 오프셋</button></div>
+  </div>
+</section>
+
+<!-- ======================= 작업 ======================= -->
+<section class="view" id="v-jobs">
+  <div class="card">
+    <h3>지금 계산 저장</h3>
+    <div class="grid2">
+      <label class="f" for="jobName">라인 / 도면 번호<input id="jobName" type="text" placeholder="예: SG-201 N2 라인"></label>
+      <label class="f" for="jobMemo">메모<input id="jobMemo" type="text" placeholder="예: 3층 VMB 앞"></label>
+    </div>
+    <button type="button" class="primary" data-act="saveJob">저장</button>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h3>저장된 작업 <span class="sub" id="jobCount"></span></h3></div>
+    <div class="alert" id="backupNag"></div>
+    <input type="text" id="jobSearch" placeholder="검색 (라인번호, 메모)">
+    <div class="list" id="jobList"></div>
+  </div>
+  <div class="card">
+    <h3>백업 · 다른 폰으로 옮기기</h3>
+    <div class="sub">백업 코드를 복사해서 카톡 등으로 보내고, 새 폰에서 붙여넣기 → 복원하면 장비·작업이 그대로 옮겨져요.</div>
+    <textarea id="backupBox" aria-label="백업 코드"></textarea>
+    <div class="row">
+      <button type="button" data-act="backupMake">백업 코드 만들기 + 복사</button>
+      <button type="button" data-act="backupLoad">붙여넣은 코드로 복원</button>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 장비 ======================= -->
+<section class="view" id="v-setup">
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h3>장비 (튜브 · 벤딩기)</h3><button type="button" data-act="addPreset">+ 새 장비</button></div>
+    <div class="list" id="presetList"></div>
+  </div>
+
+  <div class="card">
+    <h3>선택한 장비 설정</h3>
+    <label class="f" for="pf-name">이름<input id="pf-name" type="text" data-pf="name"></label>
+    <div class="grid2">
+      <label class="f" for="pf-R">벤딩 R (mm)<input id="pf-R" type="number" inputmode="decimal" step="any" data-pf="R"></label>
+      <label class="f" for="pf-ins">피팅 삽입깊이 (mm)<input id="pf-ins" type="number" inputmode="decimal" step="any" data-pf="ins"></label>
+    </div>
+    <div class="grid2">
+      <label class="f" for="pf-minS">벤딩 사이 최소 직선부<input id="pf-minS" type="number" inputmode="decimal" step="any" data-pf="minS" placeholder="0"></label>
+      <label class="f" for="pf-grip">끝단 물림 길이 (여유 계산)<input id="pf-grip" type="number" inputmode="decimal" step="any" data-pf="grip" placeholder="50"></label>
+    </div>
+    <label class="switch" for="pf-dieOn">결과에 다이 눈금(mm) 표시<input type="checkbox" id="pf-dieOn" data-pfchk="dieOn"></label>
+    <label class="switch" for="pf-dieAuto">다이 mm/° 자동 (0.01745 × R)<input type="checkbox" id="pf-dieAuto" data-pfchk="dieAuto"></label>
+    <label class="f" for="pf-dieMm">다이 mm/° (실측: 45°에 50mm면 1.111)<input id="pf-dieMm" type="number" inputmode="decimal" step="any" data-pf="dieMm"></label>
+    <button type="button" class="danger" data-act="delPreset">이 장비 삭제</button>
+  </div>
+
+  <div class="card">
+    <h3>스프링백 기록 · <span id="sbTitle"></span></h3>
+    <div class="sub">벤딩기 눈금 몇 도로 꺾었을 때 실제 몇 도가 나왔는지 기록하면, 다음부터 결과에 <b>벤딩기에 맞출 눈금</b>이 자동으로 나와요.</div>
+    <label class="switch" for="pf-sbOn">스프링백 자동 보정 사용<input type="checkbox" id="pf-sbOn" data-pfchk="sbOn"></label>
+    <div class="grid2">
+      <label class="f" for="sbSet">벤딩기 눈금 (°)<input id="sbSet" type="number" inputmode="decimal" step="any" placeholder="예: 90"></label>
+      <label class="f" for="sbAct">실측 각도 (°)<input id="sbAct" type="number" inputmode="decimal" step="any" placeholder="예: 87"></label>
+    </div>
+    <button type="button" class="dark" data-act="addSb">기록 추가</button>
+    <div class="list" id="sbList"></div>
+    <div class="tbl"><table id="sbTbl"></table></div>
+  </div>
+
+  <div class="card">
+    <h3>표시</h3>
+    <label class="f" for="prec">표시 단위<select id="prec" data-st="prec"><option value="1">1 mm</option><option value="0.5">0.5 mm</option><option value="0.1">0.1 mm</option></select></label>
+    <div class="sub">벤딩 마킹 계산기 v2.6 · 벤치형 벤더, 벤딩 시작점(0°선) 마킹 기준</div>
+  </div>
+</section>
+</div>
+
+<div class="dock" id="dockWrap" aria-hidden="true"><div class="in" id="dock"></div></div>
+
+<nav class="tabs" aria-label="화면 이동"><div class="in">
+  <button type="button" class="on" data-act="tab" data-tab="calc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg>계산</button>
+  <button type="button" data-act="tab" data-tab="tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V12a6 6 0 0 1 6-6h10"/><path d="M8 20h-4M20 3v6"/></svg>패턴·도우미</button>
+  <button type="button" data-act="tab" data-tab="jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 14h8M8 17h5"/></svg>작업</button>
+  <button type="button" data-act="tab" data-tab="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>장비</button>
+</div></nav>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/*CALC*/
+function bendCalc(R, segs, bends, insStart, insEnd){
+  const rad = d => d*Math.PI/180;
+  const n = segs.length;
+  const B = bends.map(b => { const a = +b.a, sb = R*Math.tan(rad(a)/2), arc = R*rad(a); return {a, sb, arc, gain: 2*sb - arc}; });
+  const L = segs.map((s,k) => {
+    if (s.mode === 'H' && k > 0 && k < n-1) return (+s.v)/Math.sin(rad(B[k-1].a));
+    if (s.mode === 'S') return +s.v + (k>0 ? B[k-1].sb : 0) + (k<n-1 ? B[k].sb : 0);   // 직선 길이 직접 입력
+    return +s.v;
+  });
+  if (insStart) L[0] += +insStart;
+  if (insEnd) L[n-1] += +insEnd;
+  const straight = L.map((l,k) => l - (k>0 ? B[k-1].sb : 0) - (k<n-1 ? B[k].sb : 0));
+  const minL = L.map((l,k) => (k>0 ? B[k-1].sb : 0) + (k<n-1 ? B[k].sb : 0));
+  const marks = []; let pos = 0;
+  for (let i = 0; i < n-1; i++){ pos += straight[i]; marks.push(pos); pos += B[i].arc; }
+  return {B, L, straight, minL, marks, cut: pos + straight[n-1]};
+}
+function springback(recs, theta){
+  const g = {};
+  (recs||[]).forEach(r => { if (r.set>0 && r.act>0){ (g[r.act] = g[r.act] || []).push(r.set - r.act); } });
+  const pts = Object.keys(g).map(a => ({a:+a, s: g[a].reduce((x,y)=>x+y,0)/g[a].length})).sort((x,y)=>x.a-y.a);
+  if (!pts.length || !(theta>0)) return 0;
+  const first = pts[0], last = pts[pts.length-1];
+  if (theta <= first.a) return first.s*theta/first.a;
+  if (theta >= last.a) return last.s*theta/last.a;
+  for (let i=0;i<pts.length-1;i++){ const p=pts[i], q=pts[i+1]; if (theta>=p.a && theta<=q.a) return p.s + (q.s-p.s)*(theta-p.a)/(q.a-p.a); }
+  return 0;
+}
+// 짧은 구간(idx)의 양옆 벤딩 각도를 같은 비율로 줄여 직선부 >= sMin 이 되는 최대 비율
+function fitScale(R, segs, bends, idx, sMin, insS, insE, which){
+  const W = which || [idx-1, idx];
+  const test = k => bendCalc(R, segs, bends.map((b,i)=> ({a: W.includes(i) ? b.a*k : b.a})), insS, insE).straight[idx];
+  if (test(1) >= sMin - 1e-9) return 1;
+  if (test(1e-6) < sMin) return 0;
+  let lo = 1e-6, hi = 1;
+  for (let i=0;i<60;i++){ const m=(lo+hi)/2; if (test(m) >= sMin) lo = m; else hi = m; }
+  return lo;
+}
+/*END*/
+
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const clone = o => JSON.parse(JSON.stringify(o));
+const LS = {
+  get(k,d){ try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch(e){ return d; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+};
+const DEF_PRESETS = [
+  {id:'p34r100', name:'3/4" · R100', R:100, ins:0, dieOn:true, dieAuto:true, dieMm:1.745, sbOn:true, sbRecs:[]},
+  {id:'pr65', name:'R65 벤딩기', R:65, ins:0, dieOn:true, dieAuto:false, dieMm:1.111, sbOn:true, sbRecs:[]},
+];
+const EX = {
+  ex1:{segs:[{v:300,mode:'L'},{v:300,mode:'L'},{v:300,mode:'L'}], bends:[{a:90,dir:'L'},{a:90,dir:'R'}], note:''},
+  ex2:{segs:[{v:300,mode:'L'},{v:180,mode:'H'},{v:300,mode:'L'}], bends:[{a:45,dir:'U'},{a:45,dir:'D'}], note:'오프셋 180 · 45°'},
+  ex3:{segs:[{v:300,mode:'L'},{v:50,mode:'S'},{v:300,mode:'L'}], bends:[{a:90,dir:'R'},{a:19.47,dir:'L'}], note:'노트 예제3 · 90° 뒤 곧은 부분 50 (S) · 19.47° (sin = 50 ÷ 150)'}
+};
+let presets = LS.get('bc2-presets', null) || clone(DEF_PRESETS);
+const _st0 = LS.get('bc2-state', {});
+presets = presets.filter(x => !/^sw/.test(x.id) || x.id === _st0.presetId);
+if (!presets.length) presets = clone(DEF_PRESETS);
+let st = Object.assign({presetId:'p34r100', t0:0, stock:0, insStart:false, insEnd:false, prec:1, note:''}, clone(EX.ex1), LS.get('bc2-state', {}));
+let tools = Object.assign({off:{H:180,A:45,L1:300,L3:300}, roll:{V:150,W:100,A:45,L1:300,L3:300}, s3:{H:50,A:45,X:500,L4:300}, s4:{H:150,A:45,W:200,L1:300,L5:300}, tri:{a:50,b:null,c:150,t:null,order:['a','c']}}, LS.get('bc2-tools', {}));
+if (!tools.tri || !tools.tri.order) tools.tri = {a:50,b:null,c:150,t:null,order:['a','c']};
+let jobs = LS.get('bc2-jobs', []);
+let tab = 'calc';
+let lastText = '';
+
+const DIRS = {L:{t:'좌',i:'←'}, R:{t:'우',i:'→'}, U:{t:'상',i:'↑'}, D:{t:'하',i:'↓'}};
+const normB = arr => (arr||[]).forEach(b => { if (!DIRS[b.dir]) b.dir = (b.d < 0 ? 'R' : 'L'); delete b.d; });
+const modeLab = (s,k,n) => (s.mode==='H' && k>0 && k<n-1) ? 'H' : (s.mode==='S' ? 'S' : 'L');
+const isLocked = b => b.lock != null ? !!b.lock : (+b.a === 90);
+const dirTxt = d => DIRS[d] ? DIRS[d].i + ' ' + DIRS[d].t : '';
+normB(st.bends);
+const P = () => presets.find(p => p.id === st.presetId) || presets[0];
+const mmPerDeg = p => p.dieAuto ? Math.PI*(+p.R)/180 : (+p.dieMm || 0);
+const saveAll = () => { LS.set('bc2-presets', presets); LS.set('bc2-state', st); LS.set('bc2-tools', tools); LS.set('bc2-jobs', jobs); };
+const rnd = v => { const p = +st.prec || 1; return Math.round(v/p)*p; };
+const fmt = v => (+st.prec < 1 ? rnd(v).toFixed(1) : String(Math.round(rnd(v))));
+const f1 = v => (Math.round(v*10)/10).toFixed(1);
+const ang = a => (Math.round(a*100)/100) + '°';
+const CIRC = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫'];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(()=>t.classList.remove('on'), 2000); }
+
+/* ---------- 계산 탭 ---------- */
+function buildPresetChips(){
+  $('#presetChips').innerHTML = presets.map(p => `<button type="button" class="chip${p.id===st.presetId?' on':''}" data-act="pickPreset" data-id="${p.id}">${esc(p.name)}</button>`).join('');
+  $('#presetPill').textContent = P().name;
+}
+function buildSeq(){
+  const n = st.segs.length;
+  $('#seq').innerHTML = st.segs.map((s,k) => {
+    const mid = k > 0 && k < n-1;
+    let h = `<div class="seg"><span class="lab">${modeLab(s,k,n)}${k+1}</span>
+      <input type="number" inputmode="decimal" step="any" id="seg${k}" value="${s.v}" aria-label="${k+1}번 구간 길이" data-seg="${k}">
+      <div class="mode" role="group" aria-label="입력 방식">${(mid?['L','H','S']:['L','S']).map(m=>`<button type="button" data-act="mode" data-k="${k}" data-m="${m}" class="${modeLab(s,k,n)===m?'on':''}">${m}</button>`).join('')}</div>
+      <div class="hint" id="hint${k}"></div></div>`;
+    if (k < n-1){
+      const b = st.bends[k];
+      h += `<div class="bend"><div class="top-r"><span class="lab">벤딩 ${CIRC[k]}</span>
+        <input type="number" inputmode="decimal" step="any" id="ang${k}" value="${b.a}" aria-label="벤딩 ${k+1} 각도" data-ang="${k}">
+        <button type="button" class="chip sm lock${isLocked(b)?' on':''}" data-act="lock" data-k="${k}" aria-pressed="${isLocked(b)}">${isLocked(b)?'🔒 고정':'🔓 자동조정'}</button>
+        </div>
+        <div class="mode dirs" role="group" aria-label="벤딩 ${k+1} 방향">${Object.keys(DIRS).map(dk=>`<button type="button" data-act="dir" data-k="${k}" data-v="${dk}" class="${b.dir===dk?'on':''}">${DIRS[dk].i} ${DIRS[dk].t}</button>`).join('')}</div>
+        <div class="chips">${[90,45,30,60,22.5,15].map(a=>`<button type="button" class="chip sm acc${+b.a===a?' on':''}" data-act="angChip" data-k="${k}" data-a="${a}">${a}°</button>`).join('')}</div></div>`;
+    }
+    return h;
+  }).join('');
+  $('[data-act="delBend"]').disabled = n <= 2;
+}
+function fillCalcInputs(){
+  $('#t0').value = st.t0 || 0; $('#stock').value = st.stock || '';
+  $('#insVal').value = P().ins || 0; $('#insStart').checked = !!st.insStart; $('#insEnd').checked = !!st.insEnd;
+  $('#t0chips').innerHTML = [0,100,1000].map(v=>`<button type="button" class="chip sm${(+st.t0||0)===v?' on':''}" data-act="t0" data-v="${v}">${v}</button>`).join('');
+  $('#patternNote').textContent = st.note || '';
+  $$('#precChips .chip').forEach(c=>c.classList.toggle('on', +c.dataset.v === +st.prec));
+}
+
+function renderCalc(){
+  const p = P();
+  const R = +p.R, mpd = mmPerDeg(p);
+  const sbN = (p.sbRecs||[]).length;
+  $('#presetInfo').innerHTML = `<span>R <b>${R}</b></span>${p.dieOn?`<span>다이 <b>${mpd.toFixed(3)}</b> mm/°</span>`:''}<span>스프링백 <b>${p.sbOn&&sbN?sbN+'건 보정':'미사용'}</b></span>${p.ins?`<span>삽입깊이 <b>${p.ins}</b></span>`:''}`;
+  $$('#t0chips .chip').forEach(b => b.classList.toggle('on', +b.dataset.v === (+st.t0||0)));
+
+  const errs = [];
+  if (!(R > 0)) errs.push('장비 탭에서 R 값을 넣어주세요.');
+  st.bends.forEach((b,k)=>{ if(!(b.a>0 && b.a<180)) errs.push(`벤딩 ${CIRC[k]} 각도를 0°~180° 사이로 넣어주세요.`); });
+  st.segs.forEach((s,k)=>{ if(!(s.v>0)) errs.push(`${k+1}번 구간 길이를 넣어주세요.`); });
+  if (errs.length){ $('#alert').textContent = errs[0]; $('#fixBox').innerHTML = ''; setInvalid(true, '입력 중 · 아래는 이전 값'); return; }
+
+  const ins = +p.ins || 0;
+  const n = st.segs.length, minS = +p.minS || 0;
+  const trS = +st.trimStart || 0, trE = +st.trimEnd || 0;
+  const insS = (st.insStart ? ins : 0) + trS, insE = (st.insEnd ? ins : 0) + trE;
+  const r = bendCalc(R, st.segs, st.bends, insS, insE);
+  const sMinOf = k => (k>0 && k<n-1) ? minS : 0;
+  const warn = [], fixes = [];
+  let bad = false;
+  st.bends.forEach((b,k)=>{ if (b.a > 90) warn.push(`벤딩 ${CIRC[k]} ${ang(b.a)} · 90° 초과예요. 벤더 범위를 확인하세요.`); });
+  st.segs.forEach((s,k)=>{
+    if (s.mode==='H' && k>0 && k<n-1 && Math.abs(st.bends[k-1].a - st.bends[k].a) > 0.01){
+      bad = true;
+      warn.push(`H${k+1} · 앞뒤 각도가 달라요 (${ang(st.bends[k-1].a)} / ${ang(st.bends[k].a)})`);
+      fixes.push(`<div class="fix"><div class="t">H${k+1} · H 모드는 앞뒤 각도가 같아야 맞아요</div>
+        <div class="sub">H(오프셋 높이)는 두 벤딩이 같은 각도로 꺾여 평행하게 돌아올 때만 계산이 맞아요.</div>
+        <div class="row"><button type="button" class="dark" data-act="applyFix" data-idx="${k}" data-vals="${st.bends[k-1].a}">벤딩 ${CIRC[k]}을 ${ang(st.bends[k-1].a)}로 맞추기</button>
+        <button type="button" data-act="mode" data-k="${k}" data-m="L">L(교점 거리)로 바꾸기</button></div></div>`);
+    }
+  });
+  r.straight.forEach((sv,k)=>{
+    const need = sMinOf(k);
+    if (sv >= need - 1e-9) return;
+    bad = true;
+    const mid = k>0 && k<n-1, isH = mid && st.segs[k].mode==='H';
+    warn.push(`${k+1}번 구간이 짧아요 · 최소 ${f1(r.minL[k]+need)} 필요 (현재 ${f1(r.L[k])})`);
+    const lockedOf = i => isLocked(st.bends[i]);
+    const opt = (label, which, keep) => {
+      if (which.some(lockedOf)) return '';
+      const kk = fitScale(R, st.segs, st.bends, k, need, insS, insE, which);
+      if (kk <= 0){
+        const keptSB = keep != null ? r.B[keep].sb : 0;
+        return `<div class="opt imp"><div class="ol">✗ ${label}</div><div class="sub">불가 · ${keep!=null?`벤딩 ${CIRC[keep]} ${ang(r.B[keep].a)}를 유지하면 L${k+1}은 최소 <b>${f1(keptSB+need)}</b> 필요해요 (셋백 ${f1(keptSB)})`:'L이 최소 직선부보다 짧아요'}</div></div>`;
+      }
+      const vals = which.map(i => Math.floor(st.bends[i].a*kk*10)/10), ints = which.map(i => Math.floor(st.bends[i].a*kk));
+      return `<div class="opt"><div class="ol">${label}</div><div class="big">${which.map((i,j)=>`${CIRC[i]} ${ang(st.bends[i].a)} → ${vals[j]}°`).join('<br>')}</div>
+        <div class="row"><button type="button" class="dark" data-act="applyFix" data-idx="${which.join(',')}" data-vals="${vals.join(',')}">${vals.join(' / ')}° 적용</button>
+        <button type="button" data-act="applyFix" data-idx="${which.join(',')}" data-vals="${ints.join(',')}">${ints.join(' / ')}° (정수)</button></div></div>`;
+    };
+    // 각도 그대로, 길이를 최소값으로
+    const minNeed = r.minL[k] + need;
+    const lenOpt = () => {
+      const isHk = mid && st.segs[k].mode==='H';
+      const addK = k===0 ? insS : (k===n-1 ? insE : 0);
+      const isSk = st.segs[k].mode === 'S';
+      let v = isHk ? Math.ceil(minNeed*Math.sin(r.B[k-1].a*Math.PI/180)) : (isSk ? Math.ceil(need - addK) : Math.ceil(minNeed - addK));
+      const lab = isHk ? 'H' : (isSk ? 'S' : 'L');
+      return `<div class="opt"><div class="ol">✓ 각도 그대로 · ${lab}${k+1}을 최소값으로 늘리기</div>
+        <div class="sub">지금 각도(${[k-1,k].filter(i=>i>=0&&i<n-1).map(i=>CIRC[i]+' '+ang(r.B[i].a)).join(', ')})로 꺾으려면 ${isHk?'오프셋 높이':'교점 거리'}가 최소 <b>${v}</b> 필요해요. 셋백 합 ${f1(r.minL[k])}${need?` + 직선 ${need}`:''}</div>
+        <div class="row"><button type="button" class="dark" data-act="setLen" data-k="${k}" data-v="${v}">${lab}${k+1} = ${v} 적용</button></div></div>`;
+    };
+    const lockNote = idxs => { const l = idxs.filter(i=>i>=0&&i<n-1&&lockedOf(i)); return l.length ? `<div class="sub">🔒 ${l.map(i=>'벤딩 '+CIRC[i]+' '+ang(r.B[i].a)).join(', ')}는 고정이라 각도를 바꾸지 않아요. 바꾸려면 벤딩 칸의 🔒를 눌러 풀어주세요.</div>` : ''; };
+    let body = '';
+    if (!mid){
+      const end = k===0 ? 'start' : 'end', bi = k===0 ? 0 : n-2;
+      const grip = Math.max(minS, (p.grip ?? 50));
+      const extra = Math.ceil((grip - sv)/5)*5 || 5;
+      body += `<div class="opt"><div class="ol">✓ 추천 · 여유 길이로 처리 (도면 치수·각도 그대로)</div>
+        <div class="sub">튜브 ${k===0?'시작':'마지막'} 끝에 <b>${extra}mm</b> 여유를 두고 벤딩한 뒤, 그 여유만큼 잘라내세요.${grip?` (끝단 물림 ${grip}mm 확보)`:''}</div>
+        <div class="row"><button type="button" class="dark" data-act="trim" data-end="${end}" data-v="${(end==='start'?trS:trE)+extra}">${extra}mm 여유 적용</button></div></div>`;
+      body += opt(`벤딩 ${CIRC[bi]} 각도를 줄이기 (형상 바뀜)`, [bi], null);
+      body += lockNote([bi]);
+    } else if (isH){
+      body += lenOpt();
+      body += opt('양쪽 같은 각도로 줄이기 · 오프셋 높이 유지', [k-1, k], null);
+      body += lockNote([k-1, k]);
+    } else {
+      body += lenOpt();
+      body += opt(`벤딩 ${CIRC[k]}만 조정 · 벤딩 ${CIRC[k-1]} ${ang(st.bends[k-1].a)} 유지`, [k], k-1);
+      body += opt(`벤딩 ${CIRC[k-1]}만 조정 · 벤딩 ${CIRC[k]} ${ang(st.bends[k].a)} 유지`, [k-1], k);
+      body += opt('둘 다 같은 비율로 줄이기 (형상 바뀜)', [k-1, k], null);
+      body += lockNote([k-1, k]);
+      body += `<div class="opt"><div class="ol">이 ${f1(+st.segs[k].v)}이 벤딩과 벤딩 사이 <b>곧은 부분 길이</b>라면</div>
+        <div class="sub">노트 예제3의 50처럼, ①이 끝난 뒤 ${f1(+st.segs[k].v)}mm 곧게 가다가 ②를 꺾는 거라면 <b>S(직선)</b>로 바꾸세요. 각도는 그대로예요.</div>
+        <div class="row"><button type="button" class="dark" data-act="mode" data-k="${k}" data-m="S">S(직선)로 바꾸기</button></div></div>`;
+      body += `<div class="sub">오프셋 높이라면 <b>H</b>, 교점과 교점 사이 거리라면 <b>L</b>이에요.</div>`;
+    }
+    fixes.push(`<div class="fix"><div class="t">${k+1}번 구간이 짧아요 · 해결 방법</div>${body}</div>`);
+  });
+  $('#alert').textContent = warn.join(' / ');
+  $('#fixBox').innerHTML = fixes.join('');
+  setInvalid(bad, '치수 오류 · 참고값이에요. 고치기 전에 마킹하지 마세요');
+  const trimTxt = [trS?`시작 끝 <b>${trS}mm</b>`:'', trE?`마지막 끝 <b>${trE}mm</b>`:''].filter(Boolean).join(', ');
+  $('#trimMsg').innerHTML = trimTxt ? `✂ 벤딩 후 ${trimTxt} 잘라내기 · 마킹과 절단 값은 여유를 포함한 길이예요 <button type="button" class="ghost" data-act="trimClear">여유 해제</button>` : '';
+
+  st.segs.forEach((s,k)=>{
+    const h = $('#hint'+k); if (!h) return;
+    const parts = [];
+    if (s.mode==='H' && k>0 && k<st.segs.length-1) parts.push(`빗변 ${f1(r.L[k])}`);
+    if (s.mode==='S') parts.push(`교점 거리 환산 ${f1(r.L[k])}`);
+    if (k===0 && insS) parts.push(`삽입·여유 +${insS} → ${f1(r.L[k])}`);
+    if (k===st.segs.length-1 && insE) parts.push(`삽입·여유 +${insE} → ${f1(r.L[k])}`);
+    parts.push(`직선부 ${f1(r.straight[k])}`); if (s.mode!=='S') parts.push(`최소 ${f1(r.minL[k] + ((k>0&&k<st.segs.length-1)?(+P().minS||0):0))}`);
+    if (r.straight[k] < ((k>0&&k<st.segs.length-1)?(+P().minS||0):0) - 1e-9) parts.unshift('⚠ 짧음 · 마킹 결과 위 해결 방법 확인');
+    h.textContent = parts.join(' · ');
+  });
+
+  const t0 = +st.t0 || 0;
+  const cum = [...r.marks.map(rnd), rnd(r.cut)];
+  $('#resRef').textContent = t0 ? `튜브 끝 = 줄자 ${t0}` : '튜브 끝 = 줄자 0';
+  const lines = [`[벤딩 마킹] ${p.name}${t0?` · 줄자 ${t0} 시작`:''}`];
+  let html = '', prev = 0;
+  cum.forEach((c,i)=>{
+    const isCut = i === cum.length-1;
+    const single = c - prev; prev = c;
+    let setLine = '', a = 0, setA = 0;
+    if (!isCut){
+      a = r.B[i].a;
+      setA = a + (p.sbOn ? springback(p.sbRecs, a) : 0);
+      const bits = [];
+      bits.push(`방향 ${dirTxt(st.bends[i].dir)}`);
+      if (Math.abs(setA - a) > 0.05) bits.push(`벤딩기 눈금 ${ang(setA)}`);
+      if (p.dieOn && mpd > 0) bits.push(`다이 ${f1(setA*mpd)} mm`);
+      setLine = bits.join(' · ');
+    }
+    const how = isCut ? `${i>0?'호 '+f1(r.B[i-1].arc)+' + ':''}직선 ${f1(r.straight[i])}`
+      : (i===0 ? `L1 ${f1(r.L[0])} − SB ${f1(r.B[0].sb)}` : `호 ${f1(r.B[i-1].arc)} + 직선 ${f1(r.straight[i])}`);
+    html += `<div class="mk${isCut?' cut':''}">
+      <div class="tag">${isCut?'절단':'마킹 '+(i+1)} <span class="ang">${isCut?'C':ang(a)}</span></div>
+      <div class="cum">${fmt(c+t0)}</div>
+      <div class="single">단일<b>${fmt(single)}</b></div>
+      <div class="set">${setLine}</div>
+      <div class="how">${t0?`튜브 끝부터 ${fmt(c)} · `:''}${how}</div></div>`;
+    lines.push(`${isCut?'절단':'마킹'+(i+1)} ${fmt(c+t0)} ${isCut?'(C)':'('+ang(a)+' '+DIRS[st.bends[i].dir].t+(Math.abs(setA-a)>0.05?' → 눈금 '+ang(setA):'')+')'} / 단일 ${fmt(single)}`);
+  });
+  $('#marks').innerHTML = html;
+  lastText = lines.join('\n');
+  $('#dock').innerHTML = cum.map((c,i)=> i===cum.length-1 ? `<span class="c"><small>절단</small>${fmt(c+t0)}</span>` : `<span><small>${CIRC[i]}</small>${fmt(c+t0)}</span>`).join('');
+
+  const stock = +st.stock || 0, need = rnd(r.cut);
+  if (stock > 0){
+    const rem = stock - need;
+    $('#stockMsg').innerHTML = rem >= 0
+      ? `일자관 <b class="num">${stock}</b> → 사용 <b class="num">${fmt(need)}</b> · 잔여 <b class="num">${fmt(rem)}</b>${need>0?` · 같은 배관 <b>${Math.floor(stock/need)}</b>개`:''}`
+      : `<span style="color:var(--accent);font-weight:700">일자관이 ${fmt(-rem)}mm 모자라요 (필요 ${fmt(need)})</span>`;
+  } else $('#stockMsg').innerHTML = '';
+
+  drawTape(r, cum, t0); drawShape(r);
+  renderFormula(p, r, cum, t0, ins, mpd);
+}
+
+const FONT_N = 'font-family="IBM Plex Mono,monospace"';
+function triSVG(o){
+  const W=340, H=190, padL=20, padR=96, padT=22, padB=36;
+  const a=+o.a, b=+o.b; if (!(a>0 && b>0)) return '';
+  const given = o.given || [];
+  const col = k => given.includes(k) ? 'var(--ink)' : 'var(--accent)';
+  const dr = Math.min(Math.max(a/b, 0.1), 2.4);
+  const aw = W-padL-padR, ah = H-padT-padB;
+  let bw = aw, hh = bw*dr; if (hh > ah){ hh = ah; bw = hh/dr; }
+  const x0 = padL + (aw-bw)/2, y0 = H-padB, x1 = x0+bw, y1 = y0-hh;
+  const dAng = Math.atan2(hh, bw), rr = Math.min(34, bw*0.35);
+  const ax = x0 + rr*Math.cos(dAng), ay = y0 - rr*Math.sin(dAng);
+  const hx = (x0+x1)/2, hy = (y0+y1)/2, nx = -Math.sin(dAng), ny = -Math.cos(dAng);
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="직각삼각형">
+    <polygon points="${x0},${y0} ${x1},${y0} ${x1},${y1}" fill="var(--accent-soft)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M${x1-11},${y0} V${y0-11} H${x1}" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+    <path d="M${x0+rr},${y0} A${rr},${rr} 0 0 0 ${ax},${ay}" fill="none" stroke="${col('t')}" stroke-width="2"/>
+    <text x="${x0+rr+6}" y="${y0-6}" ${FONT_N} font-size="13" font-weight="600" fill="${col('t')}">θ ${o.t!=null?(+o.t).toFixed(2)+'°':''}</text>
+    <text x="${hx}" y="${y0+22}" text-anchor="middle" ${FONT_N} font-size="13" font-weight="600" fill="${col('b')}">${o.lb||'진행 b'} ${f1(b)}</text>
+    <text x="${x1+8}" y="${(y0+y1)/2+4}" ${FONT_N} font-size="13" font-weight="600" fill="${col('a')}">${o.la||'높이 a'}</text>
+    <text x="${x1+8}" y="${(y0+y1)/2+21}" ${FONT_N} font-size="13" font-weight="600" fill="${col('a')}">${f1(a)}</text>
+    <text x="${hx+nx*14}" y="${hy+ny*14}" text-anchor="end" ${FONT_N} font-size="13" font-weight="600" fill="${col('c')}" transform="rotate(${-dAng*180/Math.PI} ${hx+nx*14} ${hy+ny*14})">${o.lc||'빗변 c'} ${f1(+o.c)}</text>
+  </svg>`;
+}
+function bendSVG(R, a, sb, arc){
+  const W=340, H=170, th=a*Math.PI/180, u=[Math.cos(th), Math.sin(th)];
+  const e = Math.max(sb*0.7, R*0.25);
+  const T1=[-sb,0], T2=[sb*u[0], sb*u[1]], C=[-sb, R];
+  const arcPts=[]; for(let i=0;i<=24;i++){ const g=-Math.PI/2 + th*i/24; arcPts.push([C[0]+R*Math.cos(g), C[1]+R*Math.sin(g)]); }
+  const pts=[[-sb-e,0],[0,0],[T2[0]+e*u[0],T2[1]+e*u[1]],...arcPts,[sb*0.9,0]];
+  const minX=Math.min(...pts.map(p=>p[0])), maxX=Math.max(...pts.map(p=>p[0])), minY=Math.min(...pts.map(p=>p[1])), maxY=Math.max(...pts.map(p=>p[1]));
+  const pad=30, sc=Math.min((W-2*pad)/Math.max(maxX-minX,1),(H-2*pad)/Math.max(maxY-minY,1));
+  const ox=pad+((W-2*pad)-(maxX-minX)*sc)/2, oy=pad+((H-2*pad)-(maxY-minY)*sc)/2;
+  const T=p=>[ox+(p[0]-minX)*sc, H-(oy+(p[1]-minY)*sc)];
+  const L=(p,q,st)=>{const A=T(p),B=T(q);return `<line x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" ${st}/>`;};
+  const V=T([0,0]), t1=T(T1), t2=T(T2), c=T(C);
+  const arcPath = arcPts.map((p,i)=>{const q=T(p);return (i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join(' ');
+  const am = T(arcPts[12]); const nl = Math.hypot(am[0]-c[0], am[1]-c[1]) || 1, nrm = [(am[0]-c[0])/nl, (am[1]-c[1])/nl];
+  const ar = 22, angEnd=[V[0]+ar*Math.cos(th), V[1]-ar*Math.sin(th)];
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="벤딩 모형">
+    ${L(T1,C,'stroke="var(--line)" stroke-width="1.2" stroke-dasharray="3 4"')}${L(T2,C,'stroke="var(--line)" stroke-width="1.2" stroke-dasharray="3 4"')}
+    ${L([0,0],[sb*0.9,0],'stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 3"')}
+    ${L(T1,[0,0],'stroke="var(--muted)" stroke-width="1.3" stroke-dasharray="5 4"')}${L([0,0],T2,'stroke="var(--muted)" stroke-width="1.3" stroke-dasharray="5 4"')}
+    ${L([-sb-e,0],T1,'stroke="var(--tube)" stroke-width="8" stroke-linecap="round"')}
+    ${L(T2,[T2[0]+e*u[0],T2[1]+e*u[1]],'stroke="var(--tube)" stroke-width="8" stroke-linecap="round"')}
+    <path d="${arcPath}" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="butt" opacity=".85"/>
+    <path d="M${V[0]+ar},${V[1]} A${ar},${ar} 0 0 0 ${angEnd[0]},${angEnd[1]}" fill="none" stroke="var(--ink)" stroke-width="1.5"/>
+    <text x="${V[0]+ar+4}" y="${V[1]-4}" ${FONT_N} font-size="12" font-weight="600" fill="var(--ink)">θ ${ang(a)}</text>
+    <circle cx="${V[0]}" cy="${V[1]}" r="3.5" fill="var(--ink)"/><text x="${V[0]+5}" y="${V[1]+30}" font-size="11" fill="var(--muted)">교점</text>
+    <line x1="${t1[0]}" y1="${t1[1]-12}" x2="${t1[0]}" y2="${t1[1]+12}" stroke="var(--accent)" stroke-width="3"/>
+    <text x="${t1[0]-5}" y="${t1[1]+24}" text-anchor="end" font-size="11" font-weight="700" fill="var(--accent)">마킹(0°선)</text>
+    <text x="${(t1[0]+V[0])/2}" y="${V[1]+17}" text-anchor="middle" ${FONT_N} font-size="12" font-weight="600" fill="var(--ink)">SB ${f1(sb)}</text>
+    <text x="${(V[0]+t2[0])/2+10}" y="${(V[1]+t2[1])/2+4}" ${FONT_N} font-size="12" fill="var(--muted)">SB</text>
+    <text x="${am[0]-nrm[0]*14}" y="${am[1]-nrm[1]*14+4}" text-anchor="end" ${FONT_N} font-size="12" font-weight="600" fill="var(--accent)">호 ${f1(arc)}</text>
+    <text x="${t1[0]-6}" y="${Math.max(14, t1[1]-50)}" text-anchor="end" ${FONT_N} font-size="12" fill="var(--muted)">R ${R}${c[1] < 0 ? ' ↑' : ''}</text>
+  </svg>`;
+}
+function triSolve(g){
+  const r=d=>d*Math.PI/180, dg=x=>x*180/Math.PI, F=v=>(Math.round(v*100)/100).toString(), F4=v=>v.toFixed(4);
+  const has=k=>g[k]!=null && g[k]!=='' && !isNaN(g[k]);
+  let a=+g.a, b=+g.b, c=+g.c, t=+g.t; const how=[];
+  if (has('t')){
+    if (!(t>0 && t<90)) return {err:'각도는 0°~90° 사이로 넣어주세요'};
+    const s1=Math.sin(r(t)), c1=Math.cos(r(t)), t1=Math.tan(r(t));
+    if (has('c')){ if(!(c>0)) return {err:'빗변을 넣어주세요'}; a=c*s1; b=c*c1; how.push(`a = c × sinθ = ${F(c)} × ${F4(s1)} = <b>${F(a)}</b>`, `b = c × cosθ = ${F(c)} × ${F4(c1)} = <b>${F(b)}</b>`); }
+    else if (has('a')){ if(!(a>0)) return {err:'높이를 넣어주세요'}; c=a/s1; b=a/t1; how.push(`c = a ÷ sinθ = ${F(a)} ÷ ${F4(s1)} = <b>${F(c)}</b>`, `b = a ÷ tanθ = ${F(a)} ÷ ${F4(t1)} = <b>${F(b)}</b>`); }
+    else if (has('b')){ if(!(b>0)) return {err:'진행을 넣어주세요'}; c=b/c1; a=b*t1; how.push(`c = b ÷ cosθ = ${F(b)} ÷ ${F4(c1)} = <b>${F(c)}</b>`, `a = b × tanθ = ${F(b)} × ${F4(t1)} = <b>${F(a)}</b>`); }
+    else return {err:'값을 하나 더 넣어주세요'};
+  } else if (has('a') && has('b')){ if(!(a>0&&b>0)) return {err:'0보다 큰 값을 넣어주세요'}; c=Math.hypot(a,b); t=dg(Math.atan(a/b)); how.push(`c = √(a² + b²) = √(${F(a)}² + ${F(b)}²) = <b>${F(c)}</b>`, `θ = atan(a ÷ b) = atan(${F4(a/b)}) = <b>${F(t)}°</b>`); }
+  else if (has('a') && has('c')){ if(!(a>0 && c>a)) return {err:'빗변은 높이보다 커야 해요'}; t=dg(Math.asin(a/c)); b=Math.sqrt(c*c-a*a); how.push(`θ = asin(a ÷ c) = asin(${F4(a/c)}) = <b>${F(t)}°</b>`, `b = √(c² − a²) = <b>${F(b)}</b>`); }
+  else if (has('b') && has('c')){ if(!(b>0 && c>b)) return {err:'빗변은 진행보다 커야 해요'}; t=dg(Math.acos(b/c)); a=Math.sqrt(c*c-b*b); how.push(`θ = acos(b ÷ c) = acos(${F4(b/c)}) = <b>${F(t)}°</b>`, `a = √(c² − b²) = <b>${F(a)}</b>`); }
+  else return {err:'값을 2개 넣어주세요'};
+  return {a,b,c,t,how};
+}
+function renderTri(){
+  const g = tools.tri, keys = g.order.slice(-2), given = {};
+  keys.forEach(k => given[k] = g[k]);
+  const res = triSolve(given);
+  ['a','b','c','t'].forEach(k=>{
+    const el = $('#tr-'+k); const isG = keys.includes(k);
+    el.classList.toggle('calc', !isG && !res.err);
+    if (!isG && document.activeElement !== el) el.value = res.err ? '' : (Math.round(res[k]*100)/100);
+    if (isG && document.activeElement !== el) el.value = g[k] ?? '';
+  });
+  if (res.err){ $('#triFig').innerHTML = `<div class="empty">${res.err}</div>`; $('#triFx').innerHTML = ''; return; }
+  $('#triFig').innerHTML = triSVG({a:res.a, b:res.b, c:res.c, t:res.t, given:keys});
+  const p = P(), R = +p.R || 0;
+  let extra = '';
+  if (R > 0){
+    const need = 2*R*Math.tan(res.t*Math.PI/360);
+    const kk = fitScale(R, [{v:1e5,mode:'L'},{v:res.a,mode:'H'},{v:1e5,mode:'L'}], [{a:89.99},{a:89.99}], 1, +p.minS||0, 0, 0);
+    extra = `<div class="c" style="margin-top:6px">오프셋으로 쓰면 (${esc(p.name)}): 빗변 최소 2 × R × tan(θ/2) = 2 × ${R} × ${Math.tan(res.t*Math.PI/360).toFixed(4)} = <b>${f1(need)}</b> → ${res.c >= need + (+p.minS||0) ? '<span style="color:var(--ok);font-weight:700">들어감</span>' : `<span style="color:var(--warn);font-weight:700">짧음 · 이 높이는 최대 ${kk>=1?'90':Math.floor(89.99*kk*10)/10}°</span>`}</div>`;
+  }
+  $('#triFx').innerHTML = `<div class="c">기준값: ${keys.map(k=>({a:'높이 a',b:'진행 b',c:'빗변 c',t:'각도 θ'})[k]).join(' + ')}</div>${res.how.map(h=>`<div>${h}</div>`).join('')}<div>나머지 각 = 90° − θ = <b>${(90-res.t).toFixed(2)}°</b></div>${extra}`;
+}
+
+function renderFormula(p, r, cum, t0, ins, mpd){
+  const R = +p.R, n = st.segs.length, f4 = v => v.toFixed(4), rd = d => d*Math.PI/180;
+  let h = `<h4>① 벤딩별 기본값 · R ${R}</h4>`;
+  r.B.forEach((b,i)=>{
+    const half = b.a/2, sbk = p.sbOn ? springback(p.sbRecs, b.a) : 0, setA = b.a + sbk;
+    h += `<div class="fx"><div class="fx-h">벤딩 ${CIRC[i]} <span class="ang">${ang(b.a)}</span> ${dirTxt(st.bends[i].dir)}</div>
+      <div class="fig">${bendSVG(R, b.a, b.sb, b.arc)}</div>
+      <div>셋백 SB = R × tan(θ/2)</div>
+      <div>   = ${R} × tan(${ang(half)}) = ${R} × ${f4(Math.tan(rd(half)))} = <b>${f1(b.sb)}</b></div>
+      <div>호 길이 = R × θ × π/180</div>
+      <div>   = ${R} × ${b.a} × 0.017453 = <b>${f1(b.arc)}</b></div>
+      <div>게인 = 2 × SB − 호 = 2 × ${f1(b.sb)} − ${f1(b.arc)} = <b>${f1(b.gain)}</b></div>
+      ${Math.abs(sbk)>0.005 ? `<div>벤딩기 눈금 = θ + 스프링백 = ${b.a} + ${sbk.toFixed(2)} = <b>${ang(setA)}</b></div><div class="c">스프링백 기록 ${(p.sbRecs||[]).length}건에서 각도 비례·보간으로 계산</div>` : ''}
+      ${p.dieOn && mpd>0 ? `<div>다이 눈금 = 눈금각 × mm/° = ${f1(setA)} × ${mpd.toFixed(3)} = <b>${f1(setA*mpd)} mm</b></div>` : ''}
+    </div>`;
+  });
+  h += `<h4>② 구간별 길이와 직선부</h4>`;
+  st.segs.forEach((s,k)=>{
+    const lines = [];
+    const prevA = k>0 ? r.B[k-1].a : 0;
+    if (s.mode==='H' && k>0 && k<n-1){
+      lines.push(`<div>빗변 L = H ÷ sin(θ) = ${f1(+s.v)} ÷ sin(${ang(prevA)})</div>`);
+      lines.push(`<div>   = ${f1(+s.v)} ÷ ${f4(Math.sin(rd(prevA)))} = <b>${f1(r.L[k])}</b></div>`);
+      lines.push(`<div>진행거리 = H ÷ tan(θ) = ${f1(+s.v)} ÷ ${f4(Math.tan(rd(prevA)))} = <b>${f1(+s.v/Math.tan(rd(prevA)))}</b></div>`);
+      if (prevA < 90) lines.unshift(`<div class="fig">${triSVG({a:+s.v, b:+s.v/Math.tan(rd(prevA)), c:r.L[k], t:prevA, given:['a','t'], la:'높이 H', lb:'진행', lc:'빗변 L'})}</div>`);
+    } else if (k>0 && k<n-1){
+      lines.push(`<div class="c">앞 직선 기준 삼각형 (빗변 L, 각도 ${ang(prevA)})</div>`);
+      if (prevA < 90) lines.push(`<div class="fig">${triSVG({a:r.L[k]*Math.sin(rd(prevA)), b:r.L[k]*Math.cos(rd(prevA)), c:r.L[k], t:prevA, given:['c','t'], la:'높이', lb:'진행', lc:'빗변 L'})}</div>`);
+      lines.push(`<div>높이 = L × sin(θ) = ${f1(r.L[k])} × ${f4(Math.sin(rd(prevA)))} = <b>${f1(r.L[k]*Math.sin(rd(prevA)))}</b></div>`);
+      lines.push(`<div>진행 = L × cos(θ) = ${f1(r.L[k])} × ${f4(Math.cos(rd(prevA)))} = <b>${f1(r.L[k]*Math.cos(rd(prevA)))}</b></div>`);
+    }
+    const addS = (st.insStart?ins:0) + (+st.trimStart||0), addE = (st.insEnd?ins:0) + (+st.trimEnd||0);
+    if (s.mode==='S'){
+      const add = (k===0?addS:0) + (k===n-1?addE:0);
+      const sbA2 = k>0 ? r.B[k-1].sb : 0, sbB2 = k<n-1 ? r.B[k].sb : 0;
+      lines.unshift(`<div class="c">S = 벤딩이 끝난 곳부터 다음 벤딩 시작까지 곧은 길이 (직접 입력)</div>`);
+      lines.push(`<div>직선부 = S${add?' + 삽입·여유':''} = ${f1(+s.v)}${add?' + '+add:''} = <b>${f1(r.straight[k])}</b></div>`);
+      lines.push(`<div>교점 거리 L = 직선부${k>0?' + SB앞':''}${k<n-1?' + SB뒤':''} = ${[f1(r.straight[k]), ...(k>0?[f1(sbA2)]:[]), ...(k<n-1?[f1(sbB2)]:[])].join(' + ')} = <b>${f1(r.L[k])}</b></div>`);
+      h += `<div class="fx"><div class="fx-h">S${k+1} 구간</div>${lines.join('')}</div>`;
+      return;
+    }
+    if (k===0 && addS) lines.push(`<div>L1 = 입력 + 삽입깊이 + 여유 = ${f1(+s.v)} + ${st.insStart?ins:0} + ${+st.trimStart||0} = <b>${f1(r.L[k])}</b></div>`);
+    if (k===n-1 && addE) lines.push(`<div>L${n} = 입력 + 삽입깊이 + 여유 = ${f1(+s.v)} + ${st.insEnd?ins:0} + ${+st.trimEnd||0} = <b>${f1(r.L[k])}</b></div>`);
+    const sbA = k>0 ? r.B[k-1].sb : 0, sbB = k<n-1 ? r.B[k].sb : 0;
+    const terms = [f1(r.L[k])]; if (k>0) terms.push(f1(sbA)); if (k<n-1) terms.push(f1(sbB));
+    lines.push(`<div>직선부 = L${k>0?' − SB앞':''}${k<n-1?' − SB뒤':''} = ${terms.join(' − ')} = <b>${f1(r.straight[k])}</b></div>`);
+    h += `<div class="fx"><div class="fx-h">${modeLab(s,k,n)}${k+1} 구간</div>${lines.join('')}</div>`;
+  });
+  h += `<h4>③ 마킹 위치 (튜브 끝 0부터 누적)</h4><div class="fx">`;
+  let pos = 0;
+  r.marks.forEach((m,i)=>{
+    if (i===0) h += `<div>마킹 1 = 직선1 = <b>${f1(m)}</b></div>`;
+    else h += `<div>마킹 ${i+1} = 마킹${i} + 호${CIRC[i-1]} + 직선${i+1}</div><div>   = ${f1(r.marks[i-1])} + ${f1(r.B[i-1].arc)} + ${f1(r.straight[i])} = <b>${f1(m)}</b></div>`;
+  });
+  const lastI = r.marks.length-1;
+  h += `<div>절단 = 마킹${lastI+1} + 호${CIRC[lastI]} + 직선${n}</div><div>   = ${f1(r.marks[lastI])} + ${f1(r.B[lastI].arc)} + ${f1(r.straight[n-1])} = <b>${f1(r.cut)}</b></div>`;
+  if (t0) h += `<div>줄자 값 = 누적 + 줄자 시작 ${t0} → ${cum.map(c=>fmt(c+t0)).join(' / ')}</div>`;
+  h += `<div class="c">표시 단위 ${st.prec}mm로 반올림해서 위 결과에 표시</div></div>`;
+  const sumL = r.L.reduce((a,b)=>a+b,0), sumG = r.B.reduce((a,b)=>a+b.gain,0);
+  h += `<h4>④ 검산</h4><div class="fx ok"><div>절단 = ΣL − Σ게인</div><div>   = (${r.L.map(f1).join(' + ')}) − (${r.B.map(b=>f1(b.gain)).join(' + ')})</div><div>   = ${f1(sumL)} − ${f1(sumG)} = <b>${f1(sumL-sumG)}</b> ${Math.abs(sumL-sumG-r.cut)<0.01?'✓ 일치':'✗ 불일치'}</div></div>`;
+  $('#formula').innerHTML = h;
+}
+
+function setInvalid(on, msg){
+  $('.step.result').classList.toggle('invalid', !!on);
+  $('#dockWrap').classList.toggle('invalid', !!on);
+  $('#invalidMsg').textContent = on ? '⚠ ' + msg : '';
+  st._invalid = !!on;
+}
+function drawTape(r, cum, t0){
+  const x0 = 24, x1 = 570, sc = (x1-x0)/Math.max(r.cut,1), X = v => x0 + v*sc;
+  let s = `<rect x="${x0}" y="44" width="${x1-x0}" height="22" rx="4" fill="var(--tube)" opacity=".55"/>`;
+  r.marks.forEach((m,i)=>{ s += `<rect x="${X(m)}" y="44" width="${Math.max(1,r.B[i].arc*sc)}" height="22" fill="var(--accent)" opacity=".35"/>`; });
+  const pts = [0, ...cum];
+  pts.forEach((c,i)=>{
+    const x = X(c), isCut = i === pts.length-1;
+    s += `<line x1="${x}" y1="36" x2="${x}" y2="74" stroke="${i===0?'var(--muted)':(isCut?'var(--ink)':'var(--accent)')}" stroke-width="${i===0?2:3}"/>`;
+    if (i>0){
+      s += `<text x="${x}" y="${i%2?28:14}" text-anchor="${isCut?'end':'middle'}" font-family="IBM Plex Mono,monospace" font-size="20" font-weight="600" fill="${isCut?'var(--ink)':'var(--accent)'}">${isCut?'C ':''}${fmt(c+t0)}</text>`;
+      s += `<text x="${(X(pts[i-1])+x)/2}" y="96" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="17" fill="var(--muted)">${fmt(c-pts[i-1])}</text>`;
+    }
+  });
+  s += `<text x="${x0}" y="96" font-size="15" fill="var(--muted)" font-family="IBM Plex Mono,monospace" text-anchor="middle">${t0||0}</text>`;
+  $('#tape').innerHTML = s;
+}
+
+function drawShape(r){
+  const rad = d => d*Math.PI/180;
+  const add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]], mul=(a,k)=>[a[0]*k,a[1]*k,a[2]*k];
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  const rot=(v,k,t)=>{ const c=Math.cos(t), s2=Math.sin(t); return add(add(mul(v,c), mul(cross(k,v),s2)), mul(k, dot(k,v)*(1-c))); };
+  const dirs = st.bends.map(b=>b.dir);
+  const lr = dirs.some(d=>d==='L'||d==='R'), ud = dirs.some(d=>d==='U'||d==='D');
+  const view = lr && ud ? 'iso' : (ud ? 'side' : 'plan');
+  $('#viewName').textContent = view==='iso' ? '· 입체(등각)' : view==='side' ? '· 측면도(상하)' : '· 평면도(좌우)';
+  const turn = (T,U,dir,t) => {
+    if (dir==='L'||dir==='R'){ const sg = dir==='L'?1:-1; return [rot(T,U,sg*t), U]; }
+    const k = cross(T,U), sg = dir==='U'?1:-1; return [rot(T,k,sg*t), rot(U,k,sg*t)];
+  };
+  // 실제 중심선
+  let p=[0,0,0], T=[1,0,0], U=[0,0,1]; const Pt=[p], M=[];
+  r.straight.forEach((sLen,k)=>{
+    p = add(p, mul(T, Math.max(sLen,0))); Pt.push(p);
+    if (k < r.B.length){
+      M.push(p);
+      const a = rad(r.B[k].a), N = 24, ds = r.B[k].arc/N;
+      for (let i=0;i<N;i++){ const [Th] = turn(T,U,dirs[k],a*(i+.5)/N); p = add(p, mul(Th, ds)); Pt.push(p); }
+      [T,U] = turn(T,U,dirs[k],a);
+    }
+  });
+  // 교점선
+  let q=[0,0,0], T2=[1,0,0], U2=[0,0,1]; const V=[q];
+  r.L.forEach((l,k)=>{ q = add(q, mul(T2,l)); V.push(q); if (k<r.B.length) [T2,U2] = turn(T2,U2,dirs[k],rad(r.B[k].a)); });
+  const proj = v => view==='plan' ? [v[0], v[1]] : view==='side' ? [v[0], v[2]] : [(v[0]-v[1])*0.866, v[2] + (v[0]+v[1])*0.5];
+  const P2 = Pt.map(proj), V2 = V.map(proj), M2 = M.map(proj);
+  const all = [...P2, ...V2];
+  const minX = Math.min(...all.map(p=>p[0])), maxX = Math.max(...all.map(p=>p[0]));
+  const minY = Math.min(...all.map(p=>p[1])), maxY = Math.max(...all.map(p=>p[1]));
+  const pad = 34, w = 400-2*pad, hh = 260-2*pad;
+  const sc = Math.min(w/Math.max(maxX-minX,1), hh/Math.max(maxY-minY,1));
+  const ox = pad + (w-(maxX-minX)*sc)/2, oy = pad + (hh-(maxY-minY)*sc)/2;
+  const Tf = p => [ox + (p[0]-minX)*sc, 260 - (oy + (p[1]-minY)*sc)];
+  const path = pts => pts.map((p,i)=>{ const v=Tf(p); return (i?'L':'M')+v[0].toFixed(1)+' '+v[1].toFixed(1); }).join(' ');
+  let s = '';
+  if (view==='iso'){ // 바닥 축 표시
+    const o=Tf(proj([0,0,0])), ax=Tf(proj([36/sc,0,0])), ay=Tf(proj([0,36/sc,0])), az=Tf(proj([0,0,36/sc]));
+    s += `<g stroke="var(--line)" stroke-width="1"><line x1="${o[0]}" y1="${o[1]}" x2="${ax[0]}" y2="${ax[1]}"/><line x1="${o[0]}" y1="${o[1]}" x2="${ay[0]}" y2="${ay[1]}"/><line x1="${o[0]}" y1="${o[1]}" x2="${az[0]}" y2="${az[1]}"/></g>`;
+  }
+  s += `<path d="${path(V2)}" fill="none" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="4 4"/>`;
+  s += `<path d="${path(P2)}" fill="none" stroke="var(--tube)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>`;
+  s += `<path d="${path(P2)}" fill="none" stroke="var(--ink)" stroke-width="1.5"/>`;
+  for (let k=0;k<V2.length-1;k++){ const a=Tf(V2[k]), b=Tf(V2[k+1]); s += `<text x="${(a[0]+b[0])/2}" y="${(a[1]+b[1])/2-7}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="var(--muted)">L${k+1} ${f1(r.L[k])}</text>`; }
+  M2.forEach((m,i)=>{ const v=Tf(m); s += `<circle cx="${v[0]}" cy="${v[1]}" r="5" fill="var(--accent)"/><text x="${v[0]+8}" y="${v[1]+15}" font-size="13" font-weight="700" fill="var(--accent)">${CIRC[i]}${DIRS[dirs[i]].i}</text>`; });
+  const a0=Tf(P2[0]), en=Tf(P2[P2.length-1]);
+  s += `<text x="${a0[0]}" y="${a0[1]+17}" text-anchor="middle" font-size="12" fill="var(--muted)">0</text><text x="${en[0]}" y="${en[1]-9}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">C</text>`;
+  $('#shape').innerHTML = s;
+}
+
+/* ---------- 패턴 · 도우미 ---------- */
+const rad = d => d*Math.PI/180, deg = r => r*180/Math.PI;
+const PAT = {
+  off(t){ const D = t.H/Math.sin(rad(t.A)); return {ok: t.H>0 && t.A>0 && t.A<90,
+    out:[['빗변', f1(D)], ['진행거리', f1(t.H/Math.tan(rad(t.A)))], ['배율', (1/Math.sin(rad(t.A))).toFixed(3)]],
+    segs:[{v:t.L1,mode:'L'},{v:t.H,mode:'H'},{v:t.L3,mode:'L'}], bends:[{a:t.A,dir:'U'},{a:t.A,dir:'D'}], note:`오프셋 ${t.H} · ${t.A}°`}; },
+  roll(t){ const T = Math.hypot(t.V, t.W), D = T/Math.sin(rad(t.A)), phi = deg(Math.atan2(t.W, t.V)); return {ok: T>0 && t.A>0 && t.A<90,
+    out:[['실제 오프셋', f1(T)], ['빗변', f1(D)], ['진행거리', f1(T/Math.tan(rad(t.A)))], ['벤딩 평면 회전', phi.toFixed(1)+'°']],
+    segs:[{v:t.L1,mode:'L'},{v:+D.toFixed(2),mode:'L'},{v:t.L3,mode:'L'}], bends:[{a:t.A,dir:'U'},{a:t.A,dir:'D'}],
+    note:`롤링 오프셋 · 세로 ${t.V} 가로 ${t.W} → 실제 ${f1(T)}. 두 벤딩 모두 수직에서 ${phi.toFixed(1)}° 돌린 같은 평면에서 꺾으세요.`}; },
+  s3(t){ const half = t.A/2, D = t.H/Math.sin(rad(half)), adv = D*Math.cos(rad(half)), L1 = t.X - adv; return {ok: t.H>0 && t.A>0 && t.A<180 && L1>0,
+    out:[['경사 빗변', f1(D)], ['앞 L1', f1(L1)], ['각도', `${ang(half)} / ${ang(t.A)} / ${ang(half)}`]],
+    err: L1<=0 ? '튜브 끝 → 장애물 중심 거리가 너무 짧아요' : '',
+    segs:[{v:+L1.toFixed(2),mode:'L'},{v:+D.toFixed(2),mode:'L'},{v:+D.toFixed(2),mode:'L'},{v:t.L4,mode:'L'}],
+    bends:[{a:half,dir:'U'},{a:t.A,dir:'D'},{a:half,dir:'U'}], note:`3벤딩 새들 · 높이 ${t.H} · 가운데 ${t.A}° (양옆 ${half}°). 가운데 벤딩은 반대 방향(하).`}; },
+  s4(t){ const D = t.H/Math.sin(rad(t.A)); return {ok: t.H>0 && t.A>0 && t.A<90 && t.W>0,
+    out:[['경사 빗변', f1(D)], ['진행거리', f1(D*Math.cos(rad(t.A)))], ['전체 폭', f1(2*D*Math.cos(rad(t.A))+t.W)]],
+    segs:[{v:t.L1,mode:'L'},{v:+D.toFixed(2),mode:'L'},{v:t.W,mode:'L'},{v:+D.toFixed(2),mode:'L'},{v:t.L5,mode:'L'}],
+    bends:[{a:t.A,dir:'U'},{a:t.A,dir:'D'},{a:t.A,dir:'D'},{a:t.A,dir:'U'}], note:`4벤딩 새들 · 높이 ${t.H} · ${t.A}° · 윗변 ${t.W}`}; }
+};
+function renderTools(){
+  const pR = +P().R || 0, pMin = +P().minS || 0;
+  Object.keys(PAT).forEach(k=>{
+    const res = PAT[k](tools[k]);
+    let extra = '';
+    if (res.ok && pR > 0){
+      const t = tools[k];
+      let H = 0, base = 89.99, bendsFn = a => [{a},{a}];
+      if (k==='off' || k==='s4') H = t.H;
+      if (k==='roll') H = Math.hypot(t.V, t.W);
+      if (k==='s3'){ H = t.H; base = 179.9; bendsFn = a => [{a:a/2},{a}]; }
+      const kk = fitScale(pR, [{v:1e5,mode:'L'},{v:H,mode:'H'},{v:1e5,mode:'L'}], bendsFn(base), 1, pMin, 0, 0);
+      const maxA = Math.floor(base*kk*10)/10;
+      const cur = k==='s3' ? t.A : t.A;
+      const bad = cur > maxA + 1e-9;
+      extra = `<div style="${bad?'background:var(--warn-soft);color:var(--warn)':''}">R${pR} 최대 ${k==='s3'?'가운데 ':''}각도<b>${kk>=1?'제한 없음':maxA+'°'}</b>${bad?'지금 각도는 구간이 짧아요':''}</div>`;
+    }
+    $('#out-'+k).innerHTML = res.ok ? res.out.map(o=>`<div>${o[0]}<b>${o[1]}</b></div>`).join('') + extra : `<div style="grid-column:1/-1">${res.err || '값을 확인해주세요 (각도 0~90°)'}</div>`;
+  });
+  renderTri();
+  const p = P(), R = +p.R || 0, mpd = mmPerDeg(p);
+  $('#dieTitle').textContent = `${p.name} · ${mpd.toFixed(3)} mm/°`;
+  $('#dieTbl').innerHTML = `<thead><tr><th>각도</th><th>다이 mm</th><th>스프링백 반영 눈금</th><th>그때 다이 mm</th></tr></thead><tbody>${[15,22.5,30,45,60,75,90].map(a=>{ const s = a + (p.sbOn?springback(p.sbRecs,a):0); return `<tr><td>${a}°</td><td>${f1(a*mpd)}</td><td>${ang(s)}</td><td>${f1(s*mpd)}</td></tr>`; }).join('')}</tbody>`;
+  $('#refR').textContent = R;
+  $('#ref').innerHTML = `<thead><tr><th>각도</th><th>셋백</th><th>호 길이</th><th>게인(−)</th><th>호−SB(+)</th></tr></thead><tbody>${[15,22.5,30,45,60,75,90].map(a=>{ const r2=rad(a), sb=R*Math.tan(r2/2), arc=R*r2; return `<tr><td>${a}°</td><td>${f1(sb)}</td><td>${f1(arc)}</td><td>${f1(2*sb-arc)}</td><td>${f1(arc-sb)}</td></tr>`; }).join('')}</tbody>`;
+}
+function fillToolInputs(){ $$('[data-tool]').forEach(el=>{ const [g,k] = el.dataset.tool.split('.'); el.value = tools[g][k]; }); }
+
+/* ---------- 작업 ---------- */
+function snapshot(){ return {presetId: st.presetId, presetName: P().name, R: P().R, segs: clone(st.segs), bends: clone(st.bends), t0: st.t0, stock: st.stock, insStart: st.insStart, insEnd: st.insEnd, trimStart: st.trimStart||0, trimEnd: st.trimEnd||0, note: st.note}; }
+function renderJobs(){
+  const q = ($('#jobSearch').value || '').trim().toLowerCase();
+  const list = jobs.filter(j => !q || (j.name+' '+(j.memo||'')).toLowerCase().includes(q));
+  $('#jobCount').textContent = jobs.length ? `${jobs.length}건` : '';
+  const nb = jobs.filter(j => j.date > (st.lastBackup||0)).length;
+  $('#backupNag').innerHTML = nb ? `백업 안 된 작업 ${nb}개 · 앱을 지우거나 폰을 바꾸면 사라져요. 아래 "백업 코드 만들기"를 눌러 카톡 나에게 보내기로 보관하세요.` : '';
+  $('#jobList').innerHTML = list.length ? list.map(j=>{
+    const d = new Date(j.date);
+    const ds = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const segTxt = j.data.segs.map((s,k)=> modeLab(s,k,j.data.segs.length)+(k+1)+' '+s.v).join(' · ');
+    const angTxt = j.data.bends.map(b=>ang(+b.a)).join(' / ');
+    return `<div class="item"><div class="t"><b>${esc(j.name)}</b><small>${ds}</small></div>
+      ${j.memo?`<div class="sub">${esc(j.memo)}</div>`:''}
+      <div class="d">${esc(j.data.presetName||'')} · ${segTxt}<br>각도 ${angTxt}</div>
+      <div class="row"><button type="button" class="dark" data-act="loadJob" data-id="${j.id}">불러오기</button><button type="button" data-act="shareJob" data-id="${j.id}">공유</button><button type="button" class="ghost danger" data-act="delJob" data-id="${j.id}">삭제</button></div></div>`;
+  }).join('') : `<div class="empty">${jobs.length?'검색 결과가 없어요':'저장된 작업이 없어요. 계산 탭에서 "작업 저장"을 누르세요.'}</div>`;
+}
+function loadJob(j){
+  const d = clone(j.data);
+  if (!presets.find(p=>p.id===d.presetId)){ presets.push({id:d.presetId||('p'+Date.now()), name:d.presetName||('R'+d.R), R:d.R, ins:0, dieOn:false, dieAuto:true, dieMm:0, sbOn:true, sbRecs:[]}); }
+  normB(d.bends);
+  Object.assign(st, {presetId:d.presetId, segs:d.segs, bends:d.bends, t0:d.t0||0, stock:d.stock||0, insStart:!!d.insStart, insEnd:!!d.insEnd, trimStart:d.trimStart||0, trimEnd:d.trimEnd||0, note:d.note||''});
+}
+
+/* ---------- 장비 ---------- */
+function renderSetup(){
+  const p = P();
+  $('#presetList').innerHTML = presets.map(x=>`<div class="item${x.id===st.presetId?' sel':''}"><div class="t"><b>${esc(x.name)}</b><small class="num">R ${x.R}</small></div>
+    ${x.id===st.presetId?'<div class="sub" style="color:var(--accent);font-weight:600">사용 중</div>':`<div class="row"><button type="button" data-act="pickPreset" data-id="${x.id}">이 장비 사용</button></div>`}</div>`).join('');
+  $('#pf-name').value = p.name; $('#pf-R').value = p.R; $('#pf-ins').value = p.ins || 0; $('#pf-minS').value = p.minS || 0; $('#pf-grip').value = p.grip ?? 50;
+  $('#pf-dieOn').checked = !!p.dieOn; $('#pf-dieAuto').checked = !!p.dieAuto; $('#pf-sbOn').checked = !!p.sbOn;
+  $('#pf-dieMm').value = p.dieAuto ? mmPerDeg(p).toFixed(3) : p.dieMm; $('#pf-dieMm').disabled = !!p.dieAuto;
+  $('#prec').value = String(st.prec);
+  $('[data-act="delPreset"]').disabled = presets.length <= 1;
+  renderSb();
+}
+function renderSb(){
+  const p = P();
+  $('#sbTitle').textContent = p.name;
+  const recs = p.sbRecs || [];
+  $('#sbList').innerHTML = recs.length ? recs.map((r,i)=>`<div class="item" style="flex-direction:row;align-items:center;justify-content:space-between;padding:8px 12px"><span class="num">눈금 ${ang(r.set)} → 실측 ${ang(r.act)} <span class="sub">(${(r.set-r.act>=0?'+':'')+(Math.round((r.set-r.act)*100)/100)}°)</span></span><button type="button" class="ghost danger" data-act="delSb" data-i="${i}">삭제</button></div>`).join('') : `<div class="empty">아직 기록이 없어요</div>`;
+  $('#sbTbl').innerHTML = recs.length ? `<thead><tr><th>원하는 각도</th><th>스프링백</th><th>벤딩기 눈금</th></tr></thead><tbody>${[15,30,45,60,90].map(a=>{ const s=springback(recs,a); return `<tr><td>${a}°</td><td>${s>=0?'+':''}${s.toFixed(1)}°</td><td>${ang(a+s)}</td></tr>`; }).join('')}</tbody>` : '';
+}
+
+/* ---------- 공통 ---------- */
+function renderAll(){ buildPresetChips(); renderCalc(); renderTools(); if (tab==='setup') renderSetup(); if (tab==='jobs') renderJobs(); saveAll(); }
+function setTab(t){
+  tab = t;
+  $$('.view').forEach(v=>v.classList.toggle('on', v.id==='v-'+t));
+  $$('nav.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===t));
+  $('#dockWrap').classList.toggle('hide', t!=='calc');
+  if (t==='setup') renderSetup(); if (t==='jobs') renderJobs(); if (t==='tools') renderTools();
+  window.scrollTo(0,0);
+}
+const CAP = () => (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins) || null;
+async function shareText(text){
+  const cp = CAP();
+  if (cp && cp.Share){ try { await cp.Share.share({text, dialogTitle:'마킹 결과 공유'}); return; } catch(e){ if (/cancel/i.test(String(e && e.message || e))) return; } }
+  if (navigator.share){ try { await navigator.share({text}); return; } catch(e){ if (e && e.name==='AbortError') return; } }
+  copyText(text);
+}
+function copyText(text){
+  try { navigator.clipboard.writeText(text).then(()=>toast('복사했어요'), ()=>toast('복사가 안 돼요 · 길게 눌러 선택하세요')); }
+  catch(e){ toast('복사가 안 돼요 · 길게 눌러 선택하세요'); }
+}
+function jobText(j){
+  const save = clone(st); loadJob(j); renderCalc(); const t = `${j.name}${j.memo?' ('+j.memo+')':''}\n` + lastText; Object.assign(st, save); renderCalc(); return t;
+}
+
+document.addEventListener('input', e => {
+  const el = e.target, v = el.value;
+  if (el.dataset.seg !== undefined){ st.segs[+el.dataset.seg].v = +v; }
+  else if (el.dataset.ang !== undefined){ st.bends[+el.dataset.ang].a = +v; { const lb = $(`[data-act="lock"][data-k="${el.dataset.ang}"]`), L = isLocked(st.bends[+el.dataset.ang]); if (lb){ lb.classList.toggle('on', L); lb.textContent = L ? '🔒 고정' : '🔓 자동조정'; } } $$(`[data-act="angChip"][data-k="${el.dataset.ang}"]`).forEach(b=>b.classList.toggle('on', +b.dataset.a === +v)); }
+  else if (el.dataset.st){ st[el.dataset.st] = +v || 0; }
+  else if (el.dataset.pf){ const p = P(); p[el.dataset.pf] = el.dataset.pf==='name' ? v : (+v||0); if (el.dataset.pf==='name') buildPresetChips(); if (el.id==='insVal') $('#pf-ins').value = p.ins; if (el.id==='pf-ins') $('#insVal').value = p.ins; }
+  else if (el.dataset.tool){ const [g,k] = el.dataset.tool.split('.'); tools[g][k] = +v; renderTools(); saveAll(); return; }
+  else if (el.dataset.tri){ const k = el.dataset.tri, g = tools.tri; g[k] = v === '' ? null : +v; g.order = g.order.filter(x=>x!==k); if (v !== '') g.order.push(k); renderTri(); saveAll(); return; }
+  else if (el.id === 'jobSearch'){ renderJobs(); return; }
+  else return;
+  renderCalc(); if (tab==='tools') renderTools(); if (el.dataset.pf==='name' && tab==='setup') renderSetup(); saveAll();
+});
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset.chk){ st[el.dataset.chk] = el.checked; renderCalc(); saveAll(); }
+  if (el.dataset.pfchk){ P()[el.dataset.pfchk] = el.checked; renderAll(); renderSetup(); }
+  if (el.id === 'prec'){ st.prec = +el.value; renderAll(); }
+});
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  if (a==='tab') return setTab(b.dataset.tab);
+  if (a==='pickPreset'){ st.presetId = b.dataset.id; fillCalcInputs(); renderAll(); if (tab==='setup') renderSetup(); toast(P().name+' 선택'); return; }
+  if (a==='t0'){ st.t0 = +b.dataset.v; $('#t0').value = st.t0; renderCalc(); saveAll(); return; }
+  if (a==='angChip'){ const k=+b.dataset.k; st.bends[k].a = +b.dataset.a; $('#ang'+k).value = b.dataset.a; $$(`[data-act="angChip"][data-k="${k}"]`).forEach(c=>c.classList.toggle('on', c===b)); renderCalc(); saveAll(); return; }
+  if (a==='dir'){ const k=+b.dataset.k; st.bends[k].dir = b.dataset.v; $$(`[data-act="dir"][data-k="${k}"]`).forEach(c=>c.classList.toggle('on', c===b)); renderCalc(); saveAll(); return; }
+  if (a==='mode'){ st.segs[+b.dataset.k].mode = b.dataset.m; buildSeq(); renderCalc(); saveAll(); return; }
+  if (a==='addBend'){ const last = st.bends[st.bends.length-1]; st.bends.push({a:90, dir: last ? ({L:'R',R:'L',U:'D',D:'U'})[last.dir] : 'L'}); st.segs.push({v:300,mode:'L'}); buildSeq(); renderCalc(); saveAll(); return; }
+  if (a==='delBend'){ if (st.segs.length>2){ st.segs.pop(); st.bends.pop(); if (st.segs[st.segs.length-1].mode==='H') st.segs[st.segs.length-1].mode='L'; } buildSeq(); renderCalc(); saveAll(); return; }
+  if (a==='apply'){ const res = PAT[b.dataset.pat](tools[b.dataset.pat]); if (!res.ok){ toast('값을 확인해주세요'); return; } st.segs = res.segs; st.bends = res.bends; st.note = res.note; st.trimStart = 0; st.trimEnd = 0; buildSeq(); fillCalcInputs(); renderCalc(); saveAll(); setTab('calc'); toast('계산기에 적용했어요'); return; }
+  if (a==='example'){ const ex = clone(EX[b.dataset.ex]); st.segs = ex.segs; st.bends = ex.bends; st.note = ex.note; st.trimStart = 0; st.trimEnd = 0; if (presets.find(p=>p.id==='p34r100')) st.presetId = 'p34r100'; buildSeq(); fillCalcInputs(); renderAll(); setTab('calc'); return; }
+  if (a==='applyFix'){
+    const idx = b.dataset.idx.split(',').map(Number), vals = b.dataset.vals.split(',').map(Number);
+    idx.forEach((i,j)=>{ st.bends[i].a = vals[j]; });
+    buildSeq(); renderCalc(); renderTools(); saveAll(); toast('각도를 바꿨어요'); return;
+  }
+  if (a==='triClear'){ tools.tri = {a:null,b:null,c:null,t:null,order:[]}; ['a','b','c','t'].forEach(k=>$('#tr-'+k).value=''); renderTri(); saveAll(); return; }
+  if (a==='triToOff'){ const g = tools.tri, keys = g.order.slice(-2), gv = {}; keys.forEach(k=>gv[k]=g[k]); const res = triSolve(gv); if (res.err){ toast(res.err); return; }
+    tools.off.H = Math.round(res.a*100)/100; tools.off.A = Math.round(res.t*100)/100; fillToolInputs();
+    const o = PAT.off(tools.off); st.segs = o.segs; st.bends = o.bends; st.note = o.note; buildSeq(); fillCalcInputs(); renderCalc(); renderTools(); saveAll(); setTab('calc'); toast('오프셋으로 적용했어요'); return; }
+  if (a==='share'){ if (st._invalid) return toast('치수 오류를 먼저 고쳐주세요'); return shareText(lastText); }
+  if (a==='copy'){ if (st._invalid) return toast('치수 오류를 먼저 고쳐주세요'); return copyText(lastText); }
+  if (a==='lock'){ const k=+b.dataset.k; st.bends[k].lock = !isLocked(st.bends[k]); buildSeq(); renderCalc(); saveAll(); return; }
+  if (a==='setLen'){ const k=+b.dataset.k; st.segs[k].v = +b.dataset.v; $('#seg'+k).value = b.dataset.v; renderCalc(); saveAll(); toast('길이를 바꿨어요'); return; }
+  if (a==='trim'){ st[b.dataset.end==='start'?'trimStart':'trimEnd'] = +b.dataset.v; buildSeq(); renderCalc(); saveAll(); toast('여유 길이를 적용했어요'); return; }
+  if (a==='trimClear'){ st.trimStart = 0; st.trimEnd = 0; renderCalc(); saveAll(); return; }
+  if (a==='prec'){ st.prec = +b.dataset.v; $$('#precChips .chip').forEach(c=>c.classList.toggle('on', c===b)); renderAll(); return; }
+  if (a==='quickSave'){ setTab('jobs'); $('#jobName').focus(); return; }
+  if (a==='saveJob'){
+    const name = $('#jobName').value.trim() || `작업 ${jobs.length+1}`;
+    jobs.unshift({id:'j'+Date.now(), name, memo:$('#jobMemo').value.trim(), date:Date.now(), data:snapshot()});
+    $('#jobName').value=''; $('#jobMemo').value=''; saveAll(); renderJobs(); toast('저장했어요'); return;
+  }
+  if (a==='loadJob'){ const j = jobs.find(x=>x.id===b.dataset.id); if (!j) return; loadJob(j); buildSeq(); fillCalcInputs(); renderAll(); setTab('calc'); toast(j.name+' 불러옴'); return; }
+  if (a==='shareJob'){ const j = jobs.find(x=>x.id===b.dataset.id); if (j) shareText(jobText(j)); return; }
+  if (a==='delJob'){
+    if (b.dataset.confirm!=='1'){ b.dataset.confirm='1'; b.textContent='한 번 더 누르면 삭제'; setTimeout(()=>{ if(b.isConnected){ b.dataset.confirm=''; b.textContent='삭제'; } }, 3000); return; }
+    jobs = jobs.filter(x=>x.id!==b.dataset.id); saveAll(); renderJobs(); toast('삭제했어요'); return;
+  }
+  if (a==='backupMake'){ const code = JSON.stringify({v:2, presets, jobs}); $('#backupBox').value = code; copyText(code); st.lastBackup = Date.now(); saveAll(); renderJobs(); return; }
+  if (a==='backupLoad'){
+    try { const d = JSON.parse($('#backupBox').value); if (!d.presets || !d.jobs) throw 0;
+      presets = d.presets; jobs = d.jobs; if (!presets.find(p=>p.id===st.presetId)) st.presetId = presets[0].id;
+      fillCalcInputs(); renderAll(); renderJobs(); toast(`복원 완료 · 장비 ${presets.length} · 작업 ${jobs.length}`);
+    } catch(err){ toast('백업 코드가 올바르지 않아요'); }
+    return;
+  }
+  if (a==='addPreset'){ const p = {id:'p'+Date.now(), name:'새 장비', R:100, ins:0, dieOn:true, dieAuto:true, dieMm:1.745, sbOn:true, sbRecs:[]}; presets.push(p); st.presetId = p.id; renderAll(); renderSetup(); fillCalcInputs(); $('#pf-name').focus(); $('#pf-name').select(); return; }
+  if (a==='delPreset'){
+    if (presets.length<=1) return;
+    if (b.dataset.confirm!=='1'){ b.dataset.confirm='1'; b.textContent='한 번 더 누르면 삭제'; setTimeout(()=>{ if(b.isConnected){ b.dataset.confirm=''; b.textContent='이 장비 삭제'; } }, 3000); return; }
+    b.dataset.confirm=''; b.textContent='이 장비 삭제';
+    presets = presets.filter(p=>p.id!==st.presetId); st.presetId = presets[0].id; fillCalcInputs(); renderAll(); renderSetup(); toast('삭제했어요'); return;
+  }
+  if (a==='addSb'){
+    const s = +$('#sbSet').value, ac = +$('#sbAct').value;
+    if (!(s>0 && ac>0)){ toast('눈금과 실측 각도를 넣어주세요'); return; }
+    const p = P(); (p.sbRecs = p.sbRecs || []).push({set:s, act:ac}); $('#sbSet').value=''; $('#sbAct').value='';
+    renderSb(); renderCalc(); renderTools(); saveAll(); toast('기록했어요'); return;
+  }
+  if (a==='delSb'){ P().sbRecs.splice(+b.dataset.i,1); renderSb(); renderCalc(); renderTools(); saveAll(); return; }
+});
+
+buildPresetChips(); buildSeq(); fillCalcInputs(); fillToolInputs(); renderCalc(); renderTools(); setTab('calc');
+try { const cp = CAP(); if (cp && cp.App) cp.App.addListener('backButton', () => { if (tab !== 'calc') setTab('calc'); else cp.App.exitApp(); }); } catch(e){}
+if ('serviceWorker' in navigator && location.protocol === 'https:') { try { navigator.serviceWorker.register('sw.js').catch(()=>{}); } catch(e){} }
+</script>
+</body>
+</html>

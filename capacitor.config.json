@@ -1,0 +1,6 @@
+{
+  "appId": "kr.sgon.bendcalc",
+  "appName": "벤딩마킹",
+  "webDir": "www",
+  "android": { "backgroundColor": "#12171b" }
+}
