@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -61,3 +64,14 @@ jobs:
         with:
           name: bending-marking-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: APK 이름 정리
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk bend-calc.apk
+      - name: 최신 APK 릴리스에 올리기 (폰에서 바로 받기용)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: 벤딩 마킹 계산기 APK (최신)
+          body: 최신 APK예요. 아래 bend-calc.apk 를 눌러 받으세요.
+          files: bend-calc.apk
+          make_latest: true
+          overwrite_files: true
